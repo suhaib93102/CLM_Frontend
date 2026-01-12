@@ -78,10 +78,14 @@ async function apiRequest(endpoint: string, options: RequestInit = {}) {
         tokenManager.setTokens(access, refresh);
         
         // Retry original request with new token
-        headers.Authorization = `Bearer ${access}`;
+        const retryHeaders: HeadersInit = {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${access}`,
+          ...options.headers,
+        };
         const retryResponse = await fetch(`${BASE_URL}${endpoint}`, {
           ...options,
-          headers,
+          headers: retryHeaders,
         });
         
         return retryResponse;
