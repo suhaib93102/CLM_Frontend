@@ -725,9 +725,9 @@ export const templateAPI = {
   },
 
   // Legacy endpoints (kept for backward compatibility)
-  // GET /api/contract-templates/
+  // GET /api/v1/contract-templates/
   getTemplates: async (accessToken: string) => {
-    const response = await fetch(`${BASE_URL}/api/contract-templates/`, {
+    const response = await fetch(`${BASE_URL}/api/v1/contract-templates/`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -738,9 +738,9 @@ export const templateAPI = {
     return handleResponse<any[]>(response)
   },
 
-  // POST /api/contract-templates/
+  // POST /api/v1/contract-templates/
   createTemplate: async (accessToken: string, data: any) => {
-    const response = await fetch(`${BASE_URL}/api/contract-templates/`, {
+    const response = await fetch(`${BASE_URL}/api/v1/contract-templates/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -752,9 +752,9 @@ export const templateAPI = {
     return handleResponse<any>(response)
   },
 
-  // GET /api/contract-templates/{id}/
+  // GET /api/v1/contract-templates/{id}/
   getTemplateById: async (accessToken: string, id: string) => {
-    const response = await fetch(`${BASE_URL}/api/contract-templates/${id}/`, {
+    const response = await fetch(`${BASE_URL}/api/v1/contract-templates/${id}/`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

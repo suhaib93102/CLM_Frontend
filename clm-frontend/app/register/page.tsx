@@ -82,7 +82,7 @@ export default function RegisterPage() {
     }
 
     try {
-      await register(email, password, fullName)
+      await register({ email, password, full_name: fullName })
       // Redirect to OTP verification page
       router.push(`/verify-otp?email=${encodeURIComponent(email)}&type=email`)
     } catch (err) {
