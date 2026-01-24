@@ -32,6 +32,36 @@ export interface ContractTemplate {
   status: string
 }
 
+export interface Clause {
+  id: string
+  clause_id: string
+  name: string
+  version?: number
+  contract_type: string
+  content: string
+  status: string
+  is_mandatory?: boolean
+  tags?: any
+}
+
+export interface ContractGenerateResponse {
+  contract: any
+  version: any
+  mandatory_clauses: any[]
+  clause_suggestions: Record<string, any>
+  validation_errors: any[]
+}
+
+export interface TemplateFileResponse {
+  success: boolean
+  template_type: string
+  filename: string
+  content: string
+  size: number
+  display_name?: string
+  description?: string
+}
+
 export interface Workflow {
   id: string
   name: string
@@ -217,6 +247,22 @@ export class ApiClient {
     return this.request('POST', `${ApiClient.API_V1_PREFIX}/contracts/`, data)
   }
 
+  async generateContract(params: {
+    templateId: string
+    structuredInputs?: Record<string, any>
+    userInstructions?: string
+    title?: string
+    selectedClauses?: string[]
+  }): Promise<ApiResponse<ContractGenerateResponse>> {
+    return this.request('POST', `${ApiClient.API_V1_PREFIX}/contracts/generate/`, {
+      template_id: params.templateId,
+      structured_inputs: params.structuredInputs || {},
+      user_instructions: params.userInstructions,
+      title: params.title,
+      selected_clauses: params.selectedClauses || [],
+    })
+  }
+
   async getContracts(params?: Record<string, any>): Promise<ApiResponse> {
     const queryString = params ? '?' + new URLSearchParams(params).toString() : ''
     return this.request('GET', `${ApiClient.API_V1_PREFIX}/contracts/${queryString}`)
@@ -259,6 +305,16 @@ export class ApiClient {
     return this.request('GET', `${ApiClient.API_V1_PREFIX}/contracts/statistics/`)
   }
 
+  async getRecentContracts(limit: number = 5): Promise<ApiResponse> {
+    return this.request('GET', `${ApiClient.API_V1_PREFIX}/contracts/recent/?limit=${limit}`)
+  }
+
+  // ==================== CLAUSES ====================
+  async getClauses(params?: Record<string, any>): Promise<ApiResponse<Clause[]>> {
+    const queryString = params ? '?' + new URLSearchParams(params).toString() : ''
+    return this.request('GET', `${ApiClient.API_V1_PREFIX}/clauses/${queryString}`)
+  }
+
   // ==================== TEMPLATES ====================
   async createTemplate(data: Partial<ContractTemplate>): Promise<ApiResponse<ContractTemplate>> {
     return this.request('POST', `${ApiClient.API_V1_PREFIX}/contract-templates/`, data)
@@ -281,6 +337,10 @@ export class ApiClient {
 
   async deleteTemplate(id: string): Promise<ApiResponse> {
     return this.request('DELETE', `${ApiClient.API_V1_PREFIX}/contract-templates/${id}/`)
+  }
+
+  async getTemplateFile(templateType: string): Promise<ApiResponse<TemplateFileResponse>> {
+    return this.request('GET', `${ApiClient.API_V1_PREFIX}/templates/files/${templateType}/`)
   }
 
   // ==================== WORKFLOWS ====================
@@ -310,34 +370,34 @@ export class ApiClient {
 
   // ==================== APPROVALS ====================
   async createApproval(data: Partial<ApprovalRequest>): Promise<ApiResponse<ApprovalRequest>> {
-    return this.request('POST', '/api/approvals/', data)
+    return this.request('POST', `${ApiClient.API_V1_PREFIX}/approvals/`, data)
   }
 
   async getApprovals(params?: Record<string, any>): Promise<ApiResponse> {
     const queryString = params ? '?' + new URLSearchParams(params).toString() : ''
-    return this.request('GET', `/api/approvals/${queryString}`)
+    return this.request('GET', `${ApiClient.API_V1_PREFIX}/approvals/${queryString}`)
   }
 
   async getApprovalById(id: string): Promise<ApiResponse<ApprovalRequest>> {
-    return this.request('GET', `/api/approvals/${id}/`)
+    return this.request('GET', `${ApiClient.API_V1_PREFIX}/approvals/${id}/`)
   }
 
   async updateApproval(
     id: string,
     data: Partial<ApprovalRequest>
   ): Promise<ApiResponse<ApprovalRequest>> {
-    return this.request('PUT', `/api/approvals/${id}/`, data)
+    return this.request('PUT', `${ApiClient.API_V1_PREFIX}/approvals/${id}/`, data)
   }
 
   async approveRequest(id: string, comment?: string): Promise<ApiResponse> {
-    return this.request('PUT', `/api/approvals/${id}/`, {
+    return this.request('PUT', `${ApiClient.API_V1_PREFIX}/approvals/${id}/`, {
       status: 'approved',
       comment,
     })
   }
 
   async rejectRequest(id: string, reason?: string): Promise<ApiResponse> {
-    return this.request('PUT', `/api/approvals/${id}/`, {
+    return this.request('PUT', `${ApiClient.API_V1_PREFIX}/approvals/${id}/`, {
       status: 'rejected',
       comment: reason,
     })

@@ -49,20 +49,25 @@ const DashboardPageV2: React.FC = () => {
       try {
         setIsSyncing(true);
         const client = new ApiClient();
-        const response = await client.getContracts();
+        const [statsResponse, recentResponse] = await Promise.all([
+          client.getContractStatistics(),
+          client.getRecentContracts(5),
+        ]);
 
-        if (response.success && response.data) {
-          const contracts = Array.isArray(response.data)
-            ? response.data
-            : response.data.results || [];
+        if (statsResponse.success && statsResponse.data) {
+          setStats({
+            total: (statsResponse.data as any).total || 0,
+            draft: (statsResponse.data as any).draft || 0,
+            pending: (statsResponse.data as any).pending || 0,
+            approved: (statsResponse.data as any).approved || 0,
+            rejected: (statsResponse.data as any).rejected || 0,
+          });
+        }
 
-          const total = contracts.length;
-          const draft = contracts.filter((c: any) => c.status === 'draft').length;
-          const pending = contracts.filter((c: any) => c.status === 'pending').length;
-          const approved = contracts.filter((c: any) => c.status === 'approved').length;
-          const rejected = contracts.filter((c: any) => c.status === 'rejected').length;
-
-          setStats({ total, draft, pending, approved, rejected });
+        if (recentResponse.success && recentResponse.data) {
+          const contracts = Array.isArray(recentResponse.data)
+            ? recentResponse.data
+            : (recentResponse.data as any).results || [];
 
           const recent: Contract[] = contracts.slice(0, 5).map((contract: any) => ({
             id: contract.id,
@@ -70,7 +75,7 @@ const DashboardPageV2: React.FC = () => {
             status: contract.status,
             date: contract.created_at || new Date().toISOString().split('T')[0],
             value: contract.value || 0,
-            trend: Math.random() * 20 - 10,
+            trend: 0,
           }));
 
           setRecentContracts(recent);
@@ -98,11 +103,15 @@ const DashboardPageV2: React.FC = () => {
   };
 
   const getTrendColor = (trend: number) => {
-    return trend > 0 ? 'text-green-600' : 'text-red-600';
+    if (trend > 0) return 'text-green-600';
+    if (trend < 0) return 'text-red-600';
+    return 'text-slate-500';
   };
 
   const getTrendIcon = (trend: number) => {
-    return trend > 0 ? '↑' : '↓';
+    if (trend > 0) return '↑';
+    if (trend < 0) return '↓';
+    return '—';
   };
 
   if (isLoading) {

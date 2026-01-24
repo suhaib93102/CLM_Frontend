@@ -13,12 +13,19 @@ interface NavItem {
   activePaths?: string[];
 }
 
-const SidebarV2: React.FC = () => {
+interface SidebarV2Props {
+  mobileOpen?: boolean;
+  onMobileOpenChange?: (open: boolean) => void;
+}
+
+const SidebarV2: React.FC<SidebarV2Props> = ({ mobileOpen = false, onMobileOpenChange }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { logout, user } = useAuth();
+
+  const expanded = isMobile ? mobileOpen : isExpanded;
 
   useEffect(() => {
     const handleResize = () => {
@@ -104,18 +111,18 @@ const SidebarV2: React.FC = () => {
   return (
     <>
       {/* Overlay for mobile */}
-      {isMobile && isExpanded && (
+      {isMobile && expanded && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setIsExpanded(false)}
+          onClick={() => onMobileOpenChange?.(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside
         className={`fixed left-0 top-0 h-screen bg-[#0F141F] z-50 transition-all duration-300 flex flex-col ${
-          isExpanded ? 'w-64' : 'w-[90px]'
-        } ${isMobile && !isExpanded ? '-translate-x-full' : 'translate-x-0'}`}
+          expanded ? 'w-64' : 'w-[90px]'
+        } ${isMobile && !expanded ? '-translate-x-full' : 'translate-x-0'}`}
         onMouseEnter={() => !isMobile && setIsExpanded(true)}
         onMouseLeave={() => !isMobile && setIsExpanded(false)}
       >
@@ -125,7 +132,7 @@ const SidebarV2: React.FC = () => {
             <div className="w-10 h-10 bg-[#FF5C7A] rounded-xl flex items-center justify-center flex-shrink-0">
               <span className="text-white font-bold text-lg">S</span>
             </div>
-            {isExpanded && (
+            {expanded && (
               <div className="flex flex-col">
                 <span className="text-white font-bold text-base whitespace-nowrap">Searchly</span>
                 <span className="text-white/50 text-xs whitespace-nowrap">Workspace</span>
@@ -136,7 +143,7 @@ const SidebarV2: React.FC = () => {
           {/* Mobile toggle */}
           {isMobile && (
             <button
-              onClick={() => setIsExpanded(false)}
+              onClick={() => onMobileOpenChange?.(false)}
               className="ml-auto p-2 rounded-lg hover:bg-white/10 text-white/70"
               aria-label="Close sidebar"
             >
@@ -155,19 +162,19 @@ const SidebarV2: React.FC = () => {
               <Link key={item.href} href={item.href}>
                 <div
                   className={`relative flex items-center gap-3 rounded-xl transition-all duration-200 cursor-pointer ${
-                    isExpanded ? 'px-4 py-3' : 'px-0 py-3 justify-center'
+                    expanded ? 'px-4 py-3' : 'px-0 py-3 justify-center'
                   } ${
                     active
                       ? 'text-white bg-white/10'
                       : 'text-white/45 hover:text-white/80 hover:bg-white/5'
                   }`}
                 >
-                  {active && !isExpanded && (
+                  {active && !expanded && (
                     <div className="absolute -left-4 top-1/2 -translate-y-1/2 w-1 h-8 bg-[#FF5C7A] rounded-r-full" />
                   )}
 
                   <div className="flex-shrink-0">{item.icon}</div>
-                  {isExpanded && <span className="font-medium text-sm whitespace-nowrap">{item.name}</span>}
+                  {expanded && <span className="font-medium text-sm whitespace-nowrap">{item.name}</span>}
                 </div>
               </Link>
             );
@@ -176,18 +183,18 @@ const SidebarV2: React.FC = () => {
 
         {/* User Profile & Logout */}
         <div className="mt-auto px-4 pb-6">
-          <div className={`${isExpanded ? 'flex items-center gap-3 px-2 py-3 rounded-xl hover:bg-white/5' : 'flex justify-center py-3'} transition`}
+          <div className={`${expanded ? 'flex items-center gap-3 px-2 py-3 rounded-xl hover:bg-white/5' : 'flex justify-center py-3'} transition`}
           >
             <div className="w-10 h-10 rounded-full bg-[#1F2937] flex items-center justify-center text-white font-semibold flex-shrink-0">
               {(user?.email?.[0] || 'J').toUpperCase()}
             </div>
-            {isExpanded && (
+            {expanded && (
               <div className="flex-1 min-w-0">
                 <p className="text-white text-sm font-medium truncate">{user?.email || 'Jane Cooper'}</p>
                 <p className="text-white/45 text-xs truncate">Admin</p>
               </div>
             )}
-            {isExpanded && (
+            {expanded && (
               <button
                 onClick={handleLogout}
                 className="p-2 rounded-lg hover:bg-white/10 text-white/60 hover:text-white"

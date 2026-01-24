@@ -33,8 +33,8 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Base URL from the API documentation
-  const BASE_URL = "http://13.48.148.79//api";
+  // Base URL (no trailing /api). Endpoints are under /api/v1
+  const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
   
   // Helper to get token from localStorage
   const getToken = () => {
@@ -63,12 +63,12 @@ const Dashboard = () => {
       };
 
       // Fetch Statistics (Cards & Charts)
-      const statsRes = await fetch(`${BASE_URL}/contracts/statistics/`, { headers });
+      const statsRes = await fetch(`${BASE_URL}/api/v1/contracts/statistics/`, { headers });
       if (!statsRes.ok) throw new Error('Failed to fetch statistics');
       const statsData = await statsRes.json();
       
       // Fetch Recent Contracts (List)
-      const recentRes = await fetch(`${BASE_URL}/contracts/recent/`, { headers });
+      const recentRes = await fetch(`${BASE_URL}/api/v1/contracts/recent/`, { headers });
       if (!recentRes.ok) throw new Error('Failed to fetch recent contracts');
       const recentData = await recentRes.json();
 

@@ -1,18 +1,56 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import DashboardLayout from './DashboardLayout';
 import { useRouter } from 'next/navigation';
+import {
+  Bell,
+  ChevronDown,
+  Download,
+  FileText,
+  Minus,
+  Plus,
+  Search,
+  Shield,
+} from 'lucide-react';
+import { ApiClient } from '@/app/lib/api-client';
 
 interface Template {
   id: string;
   name: string;
   contract_type: string;
   description?: string;
-  status: 'draft' | 'active' | 'archived';
+  status: string;
   created_at?: string;
   updated_at?: string;
   icon?: string;
+}
+
+type TemplateTypeKey =
+  | 'NDA'
+  | 'MSA'
+  | 'EMPLOYMENT'
+  | 'SERVICE_AGREEMENT'
+  | 'AGENCY_AGREEMENT'
+  | 'PROPERTY_MANAGEMENT'
+  | 'PURCHASE_AGREEMENT';
+
+function toTemplateTypeKey(contractType: string): TemplateTypeKey {
+  const t = (contractType || '').toLowerCase();
+  if (t.includes('nda')) return 'NDA';
+  if (t.includes('employment')) return 'EMPLOYMENT';
+  if (t.includes('agency')) return 'AGENCY_AGREEMENT';
+  if (t.includes('property')) return 'PROPERTY_MANAGEMENT';
+  if (t.includes('msa')) return 'MSA';
+  if (t.includes('purchase')) return 'PURCHASE_AGREEMENT';
+  return 'SERVICE_AGREEMENT';
+}
+
+function statusPill(status: string) {
+  const s = (status || '').toLowerCase();
+  if (s === 'published' || s === 'active') return { label: 'ACTIVE', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+  if (s === 'archived') return { label: 'ARCHIVED', cls: 'bg-slate-100 text-slate-600 border-slate-200' };
+  return { label: 'DRAFT', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
 }
 
 const TemplateLibrary: React.FC = () => {
@@ -20,42 +58,68 @@ const TemplateLibrary: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [search, setSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState<'Agreements' | 'NDA' | 'SOW' | 'All'>('All');
+  const [zoom, setZoom] = useState(100);
+  const [templateDoc, setTemplateDoc] = useState<string>('');
+  const [templateDocLoading, setTemplateDocLoading] = useState(false);
+  const [form, setForm] = useState<Record<string, string>>({
+    counterparty_name: '',
+    effective_date: '',
+    duration_months: '12',
+    termination_clause: 'Standard (30 days notice)',
+    governing_law: 'State of Delaware',
+  });
   const router = useRouter();
-
-  const BASE_URL = 'http://127.0.0.1:8000';
 
   useEffect(() => {
     fetchTemplates();
   }, []);
 
+  useEffect(() => {
+    if (!selectedTemplate) return;
+    const load = async () => {
+      try {
+        setTemplateDocLoading(true);
+        const client = new ApiClient();
+        const key = toTemplateTypeKey(selectedTemplate.contract_type);
+        const response = await client.getTemplateFile(key);
+        if (response.success && response.data) {
+          setTemplateDoc(response.data.content || '');
+          return;
+        }
+        setTemplateDoc('');
+      } catch {
+        setTemplateDoc('');
+      } finally {
+        setTemplateDocLoading(false);
+      }
+    };
+    load();
+  }, [selectedTemplate]);
+
   const fetchTemplates = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        router.push('/');
+      const client = new ApiClient();
+      const response = await client.getTemplates();
+
+      if (!response.success) {
+        if ((response.error || '').toLowerCase().includes('unauthorized')) {
+          router.push('/');
+          return;
+        }
+        setError(response.error || 'Failed to load templates');
         return;
       }
 
-      const response = await fetch(`${BASE_URL}/api/v1/contract-templates/`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const templateList = Array.isArray(response.data)
+        ? response.data
+        : (response.data as any)?.results || [];
 
-      if (response.ok) {
-        const data = await response.json();
-        const templateList = Array.isArray(data) ? data : data.results || [];
-        setTemplates(templateList);
-        if (templateList.length > 0) {
-          setSelectedTemplate(templateList[0]);
-        }
-      } else if (response.status === 401) {
-        router.push('/');
-      } else {
-        setError('Failed to load templates');
+      setTemplates(templateList);
+      if (templateList.length > 0) {
+        setSelectedTemplate(templateList[0]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -64,206 +128,394 @@ const TemplateLibrary: React.FC = () => {
     }
   };
 
-  const getTypeIcon = (contractType: string) => {
-    const icons: { [key: string]: string } = {
-      'service_agreement': '📋',
-      'nda': '🔐',
-      'partnership': '🤝',
-      'employment': '👔',
-      'marketing': '📢',
+  const stats = useMemo(() => {
+    const total = templates.length;
+    const drafts = templates.filter((t) => (t.status || '').toLowerCase() === 'draft').length;
+    const lastUpdated = templates
+      .filter((t) => t.updated_at)
+      .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))[0];
+
+    const byName = new Map<string, number>();
+    templates.forEach((t) => {
+      byName.set(t.name, (byName.get(t.name) || 0) + 1);
+    });
+    const mostUsed = Array.from(byName.entries()).sort((a, b) => b[1] - a[1])[0];
+
+    return {
+      total,
+      drafts,
+      mostUsedName: mostUsed?.[0] || (templates[0]?.name || '—'),
+      mostUsedCount: mostUsed?.[1] || 0,
+      lastUpdatedName: lastUpdated?.name || '—',
+      lastUpdatedWhen: lastUpdated?.updated_at ? new Date(lastUpdated.updated_at).toLocaleDateString() : '—',
     };
-    return icons[contractType.toLowerCase()] || '📄';
+  }, [templates]);
+
+  const categories = useMemo(() => {
+    const nda = templates.filter((t) => (t.contract_type || '').toLowerCase().includes('nda')).length;
+    const sow = templates.filter((t) => (t.contract_type || '').toLowerCase().includes('sow')).length;
+    const agreements = templates.length - nda - sow;
+    return {
+      All: templates.length,
+      Agreements: Math.max(agreements, 0),
+      NDA: nda,
+      SOW: sow,
+    };
+  }, [templates]);
+
+  const filteredTemplates = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    return templates
+      .filter((t) => {
+        const ct = (t.contract_type || '').toLowerCase();
+        if (activeCategory === 'All') return true;
+        if (activeCategory === 'NDA') return ct.includes('nda');
+        if (activeCategory === 'SOW') return ct.includes('sow');
+        return !ct.includes('nda') && !ct.includes('sow');
+      })
+      .filter((t) => {
+        if (!s) return true;
+        return (t.name || '').toLowerCase().includes(s) || (t.description || '').toLowerCase().includes(s);
+      });
+  }, [templates, search, activeCategory]);
+
+  const resetForm = () => {
+    setForm({
+      counterparty_name: '',
+      effective_date: '',
+      duration_months: '12',
+      termination_clause: 'Standard (30 days notice)',
+      governing_law: 'State of Delaware',
+    });
+  };
+
+  const updatePreview = () => {
+    if (!templateDoc) return;
+    const replacements: Record<string, string> = {
+      '{{counterparty_name}}': form.counterparty_name,
+      '{{effective_date}}': form.effective_date,
+      '{{duration_months}}': form.duration_months,
+      '{{termination_clause}}': form.termination_clause,
+      '{{governing_law}}': form.governing_law,
+    };
+    let next = templateDoc;
+    Object.entries(replacements).forEach(([k, v]) => {
+      next = next.replaceAll(k, v || k);
+    });
+    setTemplateDoc(next);
   };
 
   return (
-    <DashboardLayout
-      title="Template Library"
-      description="Browse and manage contract templates"
-      breadcrumbs={[
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Templates' },
-      ]}
-    >
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Template List - Left Sidebar */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200">
-            <div className="p-4 border-b border-slate-200">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Recent Documents
-                </h2>
-                <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">
-                  {templates.length} templates
-                </span>
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Page Header */}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl font-bold text-slate-900">Template Library</h1>
+            {selectedTemplate && (
+              <div className="hidden md:flex items-center gap-2 bg-white rounded-full border border-slate-200 px-4 py-2">
+                <span className="w-2 h-2 rounded-full bg-red-400" />
+                <span className="text-sm text-slate-700">Editing: {selectedTemplate.name}</span>
               </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
               <input
-                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search templates..."
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-slate-200 rounded-full pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
               />
             </div>
-
-            {/* Template List Items */}
-            <div className="max-h-[600px] overflow-y-auto">
-              {loading ? (
-                <div className="p-4 text-center text-slate-500">
-                  <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-2"></div>
-                  Loading templates...
-                </div>
-              ) : error ? (
-                <div className="p-4 text-center text-red-600 text-sm">{error}</div>
-              ) : templates.length === 0 ? (
-                <div className="p-4 text-center text-slate-500 text-sm">
-                  No templates found
-                </div>
-              ) : (
-                templates.map((template) => (
-                  <div
-                    key={template.id}
-                    onClick={() => setSelectedTemplate(template)}
-                    className={`p-4 border-b border-slate-100 cursor-pointer transition-all ${
-                      selectedTemplate?.id === template.id
-                        ? 'bg-blue-50 border-l-4 border-l-blue-600'
-                        : 'hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{getTypeIcon(template.contract_type)}</span>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-slate-900 truncate text-sm">
-                          {template.name}
-                        </h3>
-                        <p className="text-xs text-slate-500 capitalize">
-                          {template.status} • {template.contract_type}
-                        </p>
-                      </div>
-                      {selectedTemplate?.id === template.id && (
-                        <div className="w-2 h-2 rounded-full bg-blue-600"></div>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Create New Template Button */}
-            <div className="p-4 border-t border-slate-200">
-              <button
-                onClick={() => router.push('/templates/create')}
-                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm transition-colors"
-              >
-                + New Template
-              </button>
-            </div>
+            <button
+              className="hidden md:inline-flex items-center justify-center w-11 h-11 rounded-full bg-white border border-slate-200"
+              aria-label="Notifications"
+            >
+              <Bell className="w-5 h-5 text-slate-700" />
+            </button>
           </div>
         </div>
 
-        {/* Template Details - Main Content */}
-        <div className="lg:col-span-3">
-          {selectedTemplate ? (
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-              {/* Template Header */}
-              <div className="bg-gradient-to-r from-slate-900 to-slate-800 px-8 py-12 text-white">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="text-slate-300 text-sm uppercase tracking-widest mb-2">
-                      {selectedTemplate.contract_type.replace('_', ' ')}
-                    </p>
-                    <h1 className="text-4xl font-bold mb-4">
-                      {selectedTemplate.name}
-                    </h1>
-                    <p className="text-slate-300 max-w-2xl leading-relaxed">
-                      {selectedTemplate.description ||
-                        'This is a professional contract template ready for use.'}
-                    </p>
-                  </div>
-                  <span className="text-6xl">{getTypeIcon(selectedTemplate.contract_type)}</span>
-                </div>
+        {/* Top Stat Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+          <div className="rounded-2xl bg-gradient-to-br from-rose-400 to-pink-500 text-white p-6 relative overflow-hidden">
+            <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 80% 30%, #fff 0 2px, transparent 3px)' }} />
+            <p className="text-white/90 text-sm">Total Templates</p>
+            <p className="text-5xl font-bold mt-2">{stats.total}</p>
+            <div className="inline-flex items-center mt-4 px-3 py-1 rounded-full bg-white/20 text-xs">
+              +{Math.min(stats.total, 2)} this month
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white border border-slate-200 p-6">
+            <p className="text-slate-500 text-sm">Most Used</p>
+            <p className="text-xl font-bold text-slate-900 mt-2">{stats.mostUsedName}</p>
+            <p className="text-xs text-slate-500 mt-1">Used {stats.mostUsedCount} times</p>
+            <div className="mt-4 inline-flex items-center gap-2 text-rose-500 text-sm font-semibold">
+              <span className="w-4 h-4 rounded bg-rose-50 border border-rose-200 inline-flex items-center justify-center">↗</span>
+              Popular choice
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white border border-slate-200 p-6">
+            <p className="text-slate-500 text-sm">My Drafts</p>
+            <p className="text-4xl font-bold text-slate-900 mt-2">{String(stats.drafts).padStart(2, '0')}</p>
+            <div className="mt-4 flex items-center gap-2">
+              <span className="w-7 h-7 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center">JD</span>
+              <span className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">+2</span>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white border border-slate-200 p-6">
+            <p className="text-slate-500 text-sm">Last Updated</p>
+            <p className="text-xl font-bold text-slate-900 mt-2">{stats.lastUpdatedName}</p>
+            <p className="text-xs text-slate-500 mt-1">Updated {stats.lastUpdatedWhen}</p>
+            <p className="text-xs text-slate-400 mt-4">Version 1.0</p>
+          </div>
+        </div>
+
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          {/* Left: Categories + Templates */}
+          <div className="xl:col-span-3">
+            <div className="bg-white border border-slate-200 rounded-3xl p-5">
+              <h3 className="text-sm font-semibold text-slate-700">Categories</h3>
+              <div className="mt-4 space-y-2">
+                {(['All', 'Agreements', 'NDA', 'SOW'] as const).map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setActiveCategory(c)}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm transition ${
+                      activeCategory === c
+                        ? 'bg-rose-500 text-white'
+                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>{c}</span>
+                    <span
+                      className={`text-xs px-2 py-1 rounded-lg ${
+                        activeCategory === c ? 'bg-white/20' : 'bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {(categories as any)[c] ?? 0}
+                    </span>
+                  </button>
+                ))}
               </div>
 
-              {/* Template Content */}
-              <div className="p-8 space-y-6">
-                {/* Actions */}
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={() => router.push(`/create-contract?template=${selectedTemplate.id}`)}
-                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Use Template
-                  </button>
-                  <button className="px-6 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-medium transition-colors flex items-center gap-2">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Download
-                  </button>
-                  <button className="px-6 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-medium transition-colors flex items-center gap-2">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    Edit
-                  </button>
-                </div>
+              <div className="mt-6 flex items-center justify-between">
+                <p className="text-xs font-semibold text-slate-400 tracking-widest">TEMPLATES</p>
+                <button
+                  onClick={() => router.push('/templates/create')}
+                  className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900"
+                >
+                  <Plus className="w-4 h-4" />
+                  New
+                </button>
+              </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pt-6 border-t border-slate-200">
-                  <div>
-                    <p className="text-sm font-medium text-slate-600">Status</p>
-                    <p className="text-lg font-semibold text-slate-900 capitalize mt-1">
-                      {selectedTemplate.status}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-600">Type</p>
-                    <p className="text-lg font-semibold text-slate-900 capitalize mt-1">
-                      {selectedTemplate.contract_type.replace('_', ' ')}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-600">Created</p>
-                    <p className="text-lg font-semibold text-slate-900 mt-1">
-                      {selectedTemplate.created_at
-                        ? new Date(selectedTemplate.created_at).toLocaleDateString()
-                        : 'N/A'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Additional Sections */}
-                <div className="space-y-4 pt-6 border-t border-slate-200">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-3">
-                      Key Sections
-                    </h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        'Definitions',
-                        'Scope of Work',
-                        'Payment Terms',
-                        'Confidentiality',
-                        'Liability',
-                        'Termination',
-                      ].map((section) => (
-                        <div
-                          key={section}
-                          className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm text-slate-700"
-                        >
-                          ✓ {section}
+              <div className="mt-3 space-y-3">
+                {loading ? (
+                  <div className="text-slate-500 text-sm py-8 text-center">Loading templates…</div>
+                ) : error ? (
+                  <div className="text-red-600 text-sm py-8 text-center">{error}</div>
+                ) : filteredTemplates.length === 0 ? (
+                  <div className="text-slate-500 text-sm py-8 text-center">No templates found</div>
+                ) : (
+                  filteredTemplates.map((t) => {
+                    const pill = statusPill(t.status);
+                    const active = selectedTemplate?.id === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => setSelectedTemplate(t)}
+                        className={`w-full text-left rounded-2xl border p-4 transition ${
+                          active ? 'border-rose-400 bg-rose-50' : 'border-slate-200 bg-white hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center">
+                            {(t.contract_type || '').toLowerCase().includes('nda') ? (
+                              <Shield className="w-5 h-5 text-slate-700" />
+                            ) : (
+                              <FileText className="w-5 h-5 text-slate-700" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-slate-900 truncate">{t.name}</p>
+                            <p className="text-xs text-slate-500 mt-1 truncate">
+                              {t.description || 'Template'}
+                            </p>
+                            <div className="mt-2 flex items-center gap-2">
+                              <span className={`text-[10px] px-2 py-1 rounded-full border ${pill.cls}`}>{pill.label}</span>
+                              <span className="text-[10px] text-slate-400">v1.0</span>
+                            </div>
+                          </div>
+                          {active && <span className="w-5 h-5 rounded-full border-2 border-rose-400 bg-white flex items-center justify-center">✓</span>}
                         </div>
-                      ))}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Center: Configure Template */}
+          <div className="xl:col-span-5">
+            <div className="bg-white border border-slate-200 rounded-3xl p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">Configure Template</h2>
+                  <p className="text-sm text-slate-500 mt-1">{selectedTemplate?.name || 'Select a template'}</p>
+                </div>
+                <button onClick={resetForm} className="text-sm font-semibold text-rose-500">Reset Form</button>
+              </div>
+
+              <div className="mt-6 space-y-5">
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">Counterparty Name</label>
+                  <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <input
+                      value={form.counterparty_name}
+                      onChange={(e) => setForm((p) => ({ ...p, counterparty_name: e.target.value }))}
+                      placeholder="e.g. Acme Corp"
+                      className="w-full bg-transparent outline-none text-sm text-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700">Effective Date</label>
+                    <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <input
+                        type="date"
+                        value={form.effective_date}
+                        onChange={(e) => setForm((p) => ({ ...p, effective_date: e.target.value }))}
+                        className="w-full bg-transparent outline-none text-sm text-slate-900"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700">Duration (Months)</label>
+                    <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <input
+                        value={form.duration_months}
+                        onChange={(e) => setForm((p) => ({ ...p, duration_months: e.target.value }))}
+                        className="w-full bg-transparent outline-none text-sm text-slate-900"
+                      />
                     </div>
                   </div>
                 </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">Termination Clause</label>
+                  <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-center justify-between">
+                    <select
+                      value={form.termination_clause}
+                      onChange={(e) => setForm((p) => ({ ...p, termination_clause: e.target.value }))}
+                      className="w-full bg-transparent outline-none text-sm text-slate-900"
+                    >
+                      <option>Standard (30 days notice)</option>
+                      <option>Strict (15 days notice)</option>
+                      <option>Flexible (60 days notice)</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">Governing Law</label>
+                  <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-center justify-between">
+                    <select
+                      value={form.governing_law}
+                      onChange={(e) => setForm((p) => ({ ...p, governing_law: e.target.value }))}
+                      className="w-full bg-transparent outline-none text-sm text-slate-900"
+                    >
+                      <option>State of Delaware</option>
+                      <option>State of California</option>
+                      <option>State of New York</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                  </div>
+                </div>
+
+                <div className="pt-4 flex items-center gap-3">
+                  <button
+                    type="button"
+                    className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+                    onClick={() => router.push(`/create-contract?template=${selectedTemplate?.id || ''}`)}
+                    disabled={!selectedTemplate}
+                  >
+                    Save Draft
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 rounded-xl bg-[#0F141F] px-4 py-3 text-sm font-semibold text-white"
+                    onClick={updatePreview}
+                    disabled={!selectedTemplate}
+                  >
+                    Update Preview
+                  </button>
+                </div>
               </div>
             </div>
-          ) : (
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-12 text-center">
-              <p className="text-slate-500 text-lg">Select a template to view details</p>
+          </div>
+
+          {/* Right: Preview */}
+          <div className="xl:col-span-4">
+            <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <button className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center" onClick={() => setZoom((z) => Math.max(50, z - 10))}>
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <div className="text-xs font-semibold text-slate-600 w-12 text-center">{zoom}%</div>
+                  <button className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center" onClick={() => setZoom((z) => Math.min(150, z + 10))}>
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-50 text-rose-600 border border-rose-200 text-sm font-semibold">
+                    <Download className="w-4 h-4" />
+                    Download
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 origin-top" style={{ transform: `scale(${zoom / 100})` }}>
+                  <div className="flex items-center justify-between">
+                    <div className="w-8 h-8 rounded-xl bg-slate-900" />
+                    <div className="text-xs text-slate-400">DOC-LOCAL-{selectedTemplate?.id?.slice(0, 6) || '000001'}</div>
+                  </div>
+
+                  <div className="mt-6 text-center">
+                    <h3 className="text-xl font-black tracking-wide text-slate-900 uppercase">
+                      {selectedTemplate?.name || 'TEMPLATE'}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-2">Effective Date: {form.effective_date || '[DATE]'} </p>
+                  </div>
+
+                  <div className="mt-6">
+                    {templateDocLoading ? (
+                      <div className="text-sm text-slate-500">Loading preview…</div>
+                    ) : templateDoc ? (
+                      <pre className="whitespace-pre-wrap text-xs leading-5 text-slate-700 max-h-[520px] overflow-auto">
+                        {templateDoc}
+                      </pre>
+                    ) : (
+                      <div className="text-sm text-slate-500">No preview available for this template type.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </DashboardLayout>

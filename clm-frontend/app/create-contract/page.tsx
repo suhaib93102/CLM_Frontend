@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
 import { ApiClient } from '../lib/api-client';
 
@@ -9,17 +9,22 @@ import { ApiClient } from '../lib/api-client';
 interface Template {
   id: string;
   name: string;
+  contract_type?: string;
   description?: string;
 }
 
 interface Clause {
   id: string;
-  title: string;
+  clause_id: string;
+  name: string;
+  contract_type?: string;
   content: string;
+  is_mandatory?: boolean;
 }
 
-const CreateContract = () => {
+const CreateContractInner = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [clauses, setClauses] = useState<Clause[]>([]);
@@ -35,15 +40,45 @@ const CreateContract = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    const templateId = searchParams.get('template');
+    if (templateId) {
+      setSelectedTemplate(templateId);
+    }
+  }, [searchParams]);
+
   const fetchData = async () => {
     try {
       const client = new ApiClient();
-      const [templatesResponse, contractsResponse] = await Promise.all([
+      const [templatesResponse, clausesResponse] = await Promise.all([
         client.getTemplates(),
-        client.getContracts(),
+        client.getClauses(),
       ]);
-      setTemplates(templatesResponse?.data || []);
-      setClauses(contractsResponse?.data || []);
+
+      if (!templatesResponse.success) {
+        setError(templatesResponse.error || 'Failed to load templates');
+        setTemplates([]);
+      } else {
+        const templateList = Array.isArray(templatesResponse.data)
+          ? templatesResponse.data
+          : (templatesResponse.data as any)?.results || [];
+        setTemplates(templateList);
+
+        const templateFromQuery = searchParams.get('template');
+        if (!templateFromQuery && templateList.length > 0) {
+          setSelectedTemplate(templateList[0].id);
+        }
+      }
+
+      if (!clausesResponse.success) {
+        setError((prev) => prev || clausesResponse.error || 'Failed to load clauses');
+        setClauses([]);
+      } else {
+        const clauseList = Array.isArray(clausesResponse.data)
+          ? clausesResponse.data
+          : (clausesResponse.data as any)?.results || [];
+        setClauses(clauseList);
+      }
     } catch (err) {
       console.error('Failed to fetch data:', err);
       setError('Failed to load templates');
@@ -65,16 +100,34 @@ const CreateContract = () => {
       return;
     }
 
+    if (!selectedTemplate) {
+      setError('Please select a template');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
       const client = new ApiClient();
-      await client.createContract({
+      const response = await client.generateContract({
+        templateId: selectedTemplate,
         title: contractTitle,
-        description: selectedTemplate ? `Created from template: ${selectedTemplate}` : '',
+        selectedClauses,
+        structuredInputs: {},
       });
-      router.push('/dashboard');
+
+      if (!response.success) {
+        setError(response.error || 'Failed to create contract');
+        return;
+      }
+
+      const contractId = (response.data as any)?.contract?.id;
+      if (contractId) {
+        router.push(`/contracts/${contractId}`);
+      } else {
+        router.push('/contracts');
+      }
     } catch (err) {
       console.error('Failed to create contract:', err);
       setError(err instanceof Error ? err.message : 'Failed to create contract');
@@ -82,6 +135,11 @@ const CreateContract = () => {
       setLoading(false);
     }
   };
+
+  const selectedTemplateObj = templates.find((t) => t.id === selectedTemplate) || null;
+  const visibleClauses = selectedTemplateObj?.contract_type
+    ? clauses.filter((c) => c.contract_type === selectedTemplateObj.contract_type)
+    : clauses;
 
   return (
     <div className="min-h-screen bg-[#F2F0EB] p-8">
@@ -148,27 +206,28 @@ const CreateContract = () => {
           <div className="bg-white p-6 rounded-[20px] shadow-sm">
             <h3 className="text-lg font-semibold text-[#2D3748] mb-4">Select Clauses</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {clauses.map((clause) => (
+              {visibleClauses.map((clause) => (
                 <div
                   key={clause.id}
                   className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                    selectedClauses.includes(clause.id)
+                    selectedClauses.includes(clause.clause_id)
                       ? 'border-indigo-500 bg-indigo-50'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
-                  onClick={() => handleClauseToggle(clause.id)}
+                  onClick={() => handleClauseToggle(clause.clause_id)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <h4 className="font-medium text-[#2D3748]">{clause.title}</h4>
+                      <h4 className="font-medium text-[#2D3748]">{clause.name}</h4>
+                      <p className="text-xs text-gray-500 mt-1">{clause.clause_id}</p>
                       <p className="text-sm text-gray-600 mt-1 line-clamp-2">{clause.content}</p>
                     </div>
                     <div className={`w-5 h-5 rounded border-2 ml-3 mt-1 ${
-                      selectedClauses.includes(clause.id)
+                      selectedClauses.includes(clause.clause_id)
                         ? 'bg-indigo-500 border-indigo-500'
                         : 'border-gray-300'
                     }`}>
-                      {selectedClauses.includes(clause.id) && (
+                      {selectedClauses.includes(clause.clause_id) && (
                         <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                         </svg>
@@ -178,7 +237,7 @@ const CreateContract = () => {
                 </div>
               ))}
             </div>
-            {clauses.length === 0 && (
+            {visibleClauses.length === 0 && (
               <p className="text-gray-500 text-center py-8">No clauses available</p>
             )}
           </div>
@@ -214,4 +273,22 @@ const CreateContract = () => {
   );
 };
 
-export default CreateContract;
+const CreateContractPage = () => {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F2F0EB] p-8">
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white rounded-[20px] shadow-sm p-6 text-gray-600">
+              Loading...
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <CreateContractInner />
+    </Suspense>
+  );
+};
+
+export default CreateContractPage;
