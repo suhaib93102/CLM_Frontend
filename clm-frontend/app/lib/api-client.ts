@@ -62,6 +62,26 @@ export interface TemplateFileResponse {
   description?: string
 }
 
+export interface FileTemplateItem {
+  id: string
+  filename: string
+  name: string
+  contract_type: string
+  description?: string
+  status: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface FileTemplateContentResponse {
+  success: boolean
+  filename: string
+  name: string
+  template_type: string
+  content: string
+  size: number
+}
+
 export interface Workflow {
   id: string
   name: string
@@ -341,6 +361,20 @@ export class ApiClient {
 
   async getTemplateFile(templateType: string): Promise<ApiResponse<TemplateFileResponse>> {
     return this.request('GET', `${ApiClient.API_V1_PREFIX}/templates/files/${templateType}/`)
+  }
+
+  // ==================== FILE-BASED TEMPLATES (NO DB) ====================
+  async listTemplateFiles(): Promise<ApiResponse<{ success: boolean; count: number; results: FileTemplateItem[] }>> {
+    return this.request('GET', `${ApiClient.API_V1_PREFIX}/templates/files/`)
+  }
+
+  async createTemplateFile(params: { name?: string; filename?: string; content: string }): Promise<ApiResponse<{ success: boolean; template: FileTemplateItem }>> {
+    return this.request('POST', `${ApiClient.API_V1_PREFIX}/templates/files/`, params)
+  }
+
+  async getTemplateFileContent(filename: string): Promise<ApiResponse<FileTemplateContentResponse>> {
+    const safe = encodeURIComponent(filename)
+    return this.request('GET', `${ApiClient.API_V1_PREFIX}/templates/files/content/${safe}/`)
   }
 
   // ==================== WORKFLOWS ====================

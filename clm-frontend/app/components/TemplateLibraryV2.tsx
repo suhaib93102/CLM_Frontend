@@ -14,18 +14,9 @@ import {
   Search,
   Shield,
 } from 'lucide-react';
-import { ApiClient } from '@/app/lib/api-client';
+import { ApiClient, FileTemplateItem } from '@/app/lib/api-client';
 
-interface Template {
-  id: string;
-  name: string;
-  contract_type: string;
-  description?: string;
-  status: string;
-  created_at?: string;
-  updated_at?: string;
-  icon?: string;
-}
+type Template = FileTemplateItem;
 
 type TemplateTypeKey =
   | 'NDA'
@@ -62,13 +53,16 @@ const TemplateLibrary: React.FC = () => {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<'Agreements' | 'NDA' | 'SOW' | 'All'>('All');
   const [zoom, setZoom] = useState(100);
-  const [templateDoc, setTemplateDoc] = useState<string>('');
+  const [rawTemplateDoc, setRawTemplateDoc] = useState('');
+  const [previewTemplateDoc, setPreviewTemplateDoc] = useState('');
+  const [previewMode, setPreviewMode] = useState<'raw' | 'filled'>('raw');
   const [templateDocLoading, setTemplateDocLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [createName, setCreateName] = useState('');
   const [createType, setCreateType] = useState('NDA');
   const [createDescription, setCreateDescription] = useState('');
+  const [createContent, setCreateContent] = useState('');
   const [form, setForm] = useState<Record<string, string>>({
     counterparty_name: '',
     effective_date: '',
@@ -88,15 +82,19 @@ const TemplateLibrary: React.FC = () => {
       try {
         setTemplateDocLoading(true);
         const client = new ApiClient();
-        const key = toTemplateTypeKey(selectedTemplate.contract_type);
-        const response = await client.getTemplateFile(key);
+        const response = await client.getTemplateFileContent(selectedTemplate.filename);
         if (response.success && response.data) {
-          setTemplateDoc(response.data.content || '');
+          const content = (response.data as any).content || '';
+          setRawTemplateDoc(content);
+          setPreviewTemplateDoc(content);
+          setPreviewMode('raw');
           return;
         }
-        setTemplateDoc('');
+        setRawTemplateDoc('');
+        setPreviewTemplateDoc('');
       } catch {
-        setTemplateDoc('');
+        setRawTemplateDoc('');
+        setPreviewTemplateDoc('');
       } finally {
         setTemplateDocLoading(false);
       }
@@ -108,7 +106,7 @@ const TemplateLibrary: React.FC = () => {
     try {
       setLoading(true);
       const client = new ApiClient();
-      const response = await client.getTemplates();
+      const response = await client.listTemplateFiles();
 
       if (!response.success) {
         if ((response.error || '').toLowerCase().includes('unauthorized')) {
@@ -119,9 +117,7 @@ const TemplateLibrary: React.FC = () => {
         return;
       }
 
-      const templateList = Array.isArray(response.data)
-        ? response.data
-        : (response.data as any)?.results || [];
+      const templateList = (response.data as any)?.results || [];
 
       setTemplates(templateList);
       if (templateList.length > 0) {
@@ -138,12 +134,15 @@ const TemplateLibrary: React.FC = () => {
     try {
       setCreateBusy(true);
       const client = new ApiClient();
-      const res = await client.createTemplate({
-        name: createName.trim() || 'New Template',
-        contract_type: createType,
-        description: createDescription.trim(),
-        status: 'draft',
-      } as any);
+      const displayName = createName.trim() || 'New Template';
+      const content =
+        createContent ||
+        `${displayName.toUpperCase()}\n\n${(createDescription || '').trim()}\n\n[Paste your template text here]\n`;
+
+      const res = await client.createTemplateFile({
+        filename: `${createType}-${displayName}`,
+        content,
+      });
       if (!res.success) {
         setError(res.error || 'Failed to create template');
         return;
@@ -152,6 +151,7 @@ const TemplateLibrary: React.FC = () => {
       setCreateName('');
       setCreateType('NDA');
       setCreateDescription('');
+      setCreateContent('');
       await fetchTemplates();
     } finally {
       setCreateBusy(false);
@@ -220,7 +220,7 @@ const TemplateLibrary: React.FC = () => {
   };
 
   const updatePreview = () => {
-    if (!templateDoc) return;
+    if (!rawTemplateDoc) return;
     const replacements: Record<string, string> = {
       '{{counterparty_name}}': form.counterparty_name,
       '{{effective_date}}': form.effective_date,
@@ -228,11 +228,12 @@ const TemplateLibrary: React.FC = () => {
       '{{termination_clause}}': form.termination_clause,
       '{{governing_law}}': form.governing_law,
     };
-    let next = templateDoc;
+    let next = rawTemplateDoc;
     Object.entries(replacements).forEach(([k, v]) => {
       next = next.replaceAll(k, v || k);
     });
-    setTemplateDoc(next);
+    setPreviewTemplateDoc(next);
+    setPreviewMode('filled');
   };
 
   return (
@@ -297,7 +298,7 @@ const TemplateLibrary: React.FC = () => {
           </div>
 
           <div className="rounded-2xl bg-white border border-slate-200 p-6">
-            <p className="text-slate-500 text-sm">Most Used</p>
+            <p className="text-slate-500 text-sm">Recently Used</p>
             <p className="text-xl font-bold text-slate-900 mt-2">{stats.mostUsedName}</p>
             <p className="text-xs text-slate-500 mt-1">Used {stats.mostUsedCount} times</p>
             <div className="mt-4 inline-flex items-center gap-2 text-rose-500 text-sm font-semibold">
@@ -550,10 +551,40 @@ const TemplateLibrary: React.FC = () => {
                   <div className="mt-6">
                     {templateDocLoading ? (
                       <div className="text-sm text-slate-500">Loading preview…</div>
-                    ) : templateDoc ? (
-                      <pre className="whitespace-pre-wrap text-xs leading-5 text-slate-700 max-h-[520px] overflow-auto">
-                        {templateDoc}
-                      </pre>
+                    ) : rawTemplateDoc ? (
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1 text-[11px] font-semibold text-slate-700">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewMode('raw')}
+                              className={
+                                previewMode === 'raw'
+                                  ? 'rounded-full bg-[#0F141F] text-white px-3 py-1'
+                                  : 'rounded-full px-3 py-1 hover:bg-slate-50'
+                              }
+                            >
+                              Raw
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewMode('filled')}
+                              className={
+                                previewMode === 'filled'
+                                  ? 'rounded-full bg-[#0F141F] text-white px-3 py-1'
+                                  : 'rounded-full px-3 py-1 hover:bg-slate-50'
+                              }
+                            >
+                              Filled
+                            </button>
+                          </div>
+                          <div className="text-xs text-slate-400">Exact .txt content</div>
+                        </div>
+
+                        <pre className="whitespace-pre-wrap text-[11px] leading-6 text-slate-800 font-serif max-h-[520px] overflow-auto">
+                          {previewMode === 'raw' ? rawTemplateDoc : previewTemplateDoc}
+                        </pre>
+                      </div>
                     ) : (
                       <div className="text-sm text-slate-500">No preview available for this template type.</div>
                     )}
@@ -615,6 +646,19 @@ const TemplateLibrary: React.FC = () => {
                   className="mt-2 w-full min-h-[96px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-rose-200"
                   placeholder="Short summary (optional)"
                 />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700">Template Text</label>
+                <textarea
+                  value={createContent}
+                  onChange={(e) => setCreateContent(e.target.value)}
+                  className="mt-2 w-full min-h-[180px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-rose-200 font-mono"
+                  placeholder="Paste the exact template text (.txt) you want to display"
+                />
+                <p className="text-xs text-slate-500 mt-2">
+                  Saved as a new <span className="font-semibold">.txt</span> file in the backend templates folder (no database).
+                </p>
               </div>
             </div>
 
