@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import DashboardLayout from './DashboardLayout';
 import { useRouter } from 'next/navigation';
 import { ApiClient, Contract } from '@/app/lib/api-client';
+import { Bell, FileText, Search } from 'lucide-react';
 
 interface ContractStats {
   total: number;
@@ -25,6 +26,7 @@ const ContractsPageV2: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [search, setSearch] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -78,155 +80,108 @@ const ContractsPageV2: React.FC = () => {
       ? contracts
       : contracts.filter((c: any) => c.status === filterStatus);
 
+  const visibleContracts = filteredContracts.filter((c: any) => {
+    const s = search.trim().toLowerCase();
+    if (!s) return true;
+    const name = (c.title || c.name || '').toLowerCase();
+    return name.includes(s);
+  });
+
   return (
-    <DashboardLayout
-      title="Contracts"
-      description="Manage and track all your contracts"
-      breadcrumbs={[
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Contracts' },
-      ]}
-    >
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        {[
-          { label: 'Total', value: stats.total, icon: '📄', bgColor: 'bg-blue-50', iconColor: 'text-blue-600' },
-          { label: 'Draft', value: stats.draft, icon: '📝', bgColor: 'bg-slate-50', iconColor: 'text-slate-600' },
-          { label: 'Pending', value: stats.pending, icon: '⏳', bgColor: 'bg-amber-50', iconColor: 'text-amber-600' },
-          { label: 'Approved', value: stats.approved, icon: '✅', bgColor: 'bg-emerald-50', iconColor: 'text-emerald-600' },
-          { label: 'Rejected', value: stats.rejected, icon: '❌', bgColor: 'bg-red-50', iconColor: 'text-red-600' },
-        ].map((stat) => (
-          <div key={stat.label} className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600 mb-2">{stat.label}</p>
-                <p className="text-3xl font-bold text-slate-900">{stat.value}</p>
-              </div>
-              <div className={`p-3 ${stat.bgColor} rounded-lg`}>
-                <span className={`text-2xl ${stat.iconColor}`}>{stat.icon}</span>
-              </div>
-            </div>
+    <DashboardLayout>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900">Contracts</h1>
+        <div className="flex items-center gap-3">
+          <div className="relative hidden sm:block">
+            <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search contracts..."
+              className="w-[320px] bg-white border border-slate-200 rounded-full pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-200"
+            />
+          </div>
+          <button
+            onClick={() => router.push('/create-contract')}
+            className="inline-flex items-center gap-2 rounded-full bg-[#0F141F] text-white px-5 py-3 text-sm font-semibold"
+          >
+            <FileText className="w-4 h-4" />
+            New Contract
+          </button>
+          <button className="w-11 h-11 rounded-full bg-white border border-slate-200 inline-flex items-center justify-center" aria-label="Notifications">
+            <Bell className="w-5 h-5 text-slate-700" />
+          </button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        {[{ label: 'Total', value: stats.total }, { label: 'Draft', value: stats.draft }, { label: 'Pending', value: stats.pending }, { label: 'Approved', value: stats.approved }].map((s) => (
+          <div key={s.label} className="rounded-3xl bg-white border border-slate-200 p-6">
+            <p className="text-slate-500 text-sm">{s.label}</p>
+            <p className="text-4xl font-extrabold text-slate-900 mt-2">{String(s.value).padStart(2, '0')}</p>
           </div>
         ))}
       </div>
 
-      {/* Contracts List */}
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200">
-        {/* Header */}
-        <div className="px-6 py-6 border-b border-slate-200 flex items-center justify-between flex-wrap gap-4">
+      {/* List */}
+      <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">All Contracts</h2>
-            <p className="text-sm text-slate-600 mt-1">
-              {filteredContracts.length} contract{filteredContracts.length !== 1 ? 's' : ''}
-            </p>
+            <p className="text-lg font-extrabold text-slate-900">All Contracts</p>
+            <p className="text-sm text-slate-500 mt-1">{visibleContracts.length} contract{visibleContracts.length !== 1 ? 's' : ''}</p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Filter Buttons */}
-            <div className="flex gap-2 flex-wrap">
-              {['all', 'draft', 'pending', 'approved', 'rejected'].map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setFilterStatus(status)}
-                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                    filterStatus === status
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
-                </button>
-              ))}
-            </div>
-
-            {/* Create Button */}
-            <button
-              onClick={() => router.push('/create-contract')}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm transition-colors flex items-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              New Contract
-            </button>
+          <div className="flex gap-2 flex-wrap">
+            {['all', 'draft', 'pending', 'approved', 'rejected'].map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilterStatus(status)}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold border transition ${
+                  filterStatus === status
+                    ? 'bg-[#0F141F] text-white border-[#0F141F]'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="text-left px-6 py-3 font-semibold text-sm text-slate-700">
-                  Contract Name
-                </th>
-                <th className="text-left px-6 py-3 font-semibold text-sm text-slate-700">
-                  Status
-                </th>
-                <th className="text-left px-6 py-3 font-semibold text-sm text-slate-700">
-                  Created
-                </th>
-                <th className="text-left px-6 py-3 font-semibold text-sm text-slate-700">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center">
-                    <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
-                  </td>
-                </tr>
-              ) : error ? (
-                <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-red-600">
-                    {error}
-                  </td>
-                </tr>
-              ) : filteredContracts.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
-                    No contracts found
-                  </td>
-                </tr>
-              ) : (
-                filteredContracts.map((contract: any) => (
-                  <tr
-                    key={contract.id}
-                    className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
-                  >
-                    <td className="px-6 py-4">
-                      <p className="font-medium text-slate-900">{contract.title || contract.name}</p>
-                      <p className="text-xs text-slate-500 mt-1">{contract.id}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(
-                          contract.status
-                        )}`}
-                      >
-                        {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {contract.created_at
-                        ? new Date(contract.created_at).toLocaleDateString()
-                        : 'N/A'}
-                    </td>
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={() => router.push(`/contracts/${contract.id}`)}
-                        className="text-blue-600 hover:text-blue-700 font-medium text-sm transition-colors"
-                      >
-                        View →
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <div className="divide-y divide-slate-200">
+          {loading ? (
+            <div className="py-16 text-center text-slate-500">Loading contracts…</div>
+          ) : error ? (
+            <div className="py-16 text-center text-rose-600">{error}</div>
+          ) : visibleContracts.length === 0 ? (
+            <div className="py-16 text-center text-slate-500">No contracts found</div>
+          ) : (
+            visibleContracts.map((contract: any) => (
+              <button
+                key={contract.id}
+                onClick={() => router.push(`/contracts/${contract.id}`)}
+                className="w-full text-left px-6 py-5 hover:bg-slate-50 transition"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900 truncate">{contract.title || contract.name}</p>
+                    <p className="text-xs text-slate-500 mt-1 truncate">{contract.id}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(contract.status)}`}>
+                      {String(contract.status).toUpperCase()}
+                    </span>
+                    <span className="text-xs text-slate-500 hidden sm:inline">
+                      {contract.created_at ? new Date(contract.created_at).toLocaleDateString() : '—'}
+                    </span>
+                    <span className="text-sm font-semibold text-slate-700">View →</span>
+                  </div>
+                </div>
+              </button>
+            ))
+          )}
         </div>
       </div>
     </DashboardLayout>

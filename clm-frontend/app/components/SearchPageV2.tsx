@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import DashboardLayout from './DashboardLayout';
+import { Bell } from 'lucide-react';
 
 interface SearchResult {
   id: string;
@@ -61,14 +62,18 @@ const SearchPageV2: React.FC = () => {
   };
 
   return (
-    <DashboardLayout
-      title="Search"
-      description="Search across contracts, templates, and clauses"
-      breadcrumbs={[
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Search' },
-      ]}
-    >
+    <DashboardLayout>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900">Search</h1>
+        <button
+          className="w-11 h-11 rounded-full bg-white border border-slate-200 inline-flex items-center justify-center"
+          aria-label="Notifications"
+        >
+          <Bell className="w-5 h-5 text-slate-700" />
+        </button>
+      </div>
+
       {/* Search Bar */}
       <form onSubmit={handleSearch} className="mb-8">
         <div className="relative">

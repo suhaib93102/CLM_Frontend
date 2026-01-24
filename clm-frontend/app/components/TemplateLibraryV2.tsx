@@ -9,6 +9,7 @@ import {
   Download,
   FileText,
   Minus,
+  PlusCircle,
   Plus,
   Search,
   Shield,
@@ -63,6 +64,11 @@ const TemplateLibrary: React.FC = () => {
   const [zoom, setZoom] = useState(100);
   const [templateDoc, setTemplateDoc] = useState<string>('');
   const [templateDocLoading, setTemplateDocLoading] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createType, setCreateType] = useState('NDA');
+  const [createDescription, setCreateDescription] = useState('');
   const [form, setForm] = useState<Record<string, string>>({
     counterparty_name: '',
     effective_date: '',
@@ -125,6 +131,30 @@ const TemplateLibrary: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const createTemplate = async () => {
+    try {
+      setCreateBusy(true);
+      const client = new ApiClient();
+      const res = await client.createTemplate({
+        name: createName.trim() || 'New Template',
+        contract_type: createType,
+        description: createDescription.trim(),
+        status: 'draft',
+      } as any);
+      if (!res.success) {
+        setError(res.error || 'Failed to create template');
+        return;
+      }
+      setCreateOpen(false);
+      setCreateName('');
+      setCreateType('NDA');
+      setCreateDescription('');
+      await fetchTemplates();
+    } finally {
+      setCreateBusy(false);
     }
   };
 
@@ -210,11 +240,18 @@ const TemplateLibrary: React.FC = () => {
       <div className="space-y-6">
         {/* Page Header */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-3xl font-bold text-slate-900">Template Library</h1>
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div className="flex items-center gap-4">
+              <h1 className="text-3xl font-extrabold text-slate-900">Template Library</h1>
+              <button className="hidden md:inline-flex items-center gap-2 bg-white border border-slate-200 rounded-full px-4 py-2 text-sm text-slate-700">
+                All Templates
+                <ChevronDown className="w-4 h-4 text-slate-400" />
+              </button>
+            </div>
+
             {selectedTemplate && (
               <div className="hidden md:flex items-center gap-2 bg-white rounded-full border border-slate-200 px-4 py-2">
-                <span className="w-2 h-2 rounded-full bg-red-400" />
+                <span className="w-2 h-2 rounded-full bg-rose-400" />
                 <span className="text-sm text-slate-700">Editing: {selectedTemplate.name}</span>
               </div>
             )}
@@ -227,11 +264,20 @@ const TemplateLibrary: React.FC = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search templates..."
-                className="w-full bg-white border border-slate-200 rounded-full pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
+                className="w-full bg-white border border-slate-200 rounded-full pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-200"
               />
             </div>
+
             <button
-              className="hidden md:inline-flex items-center justify-center w-11 h-11 rounded-full bg-white border border-slate-200"
+              onClick={() => setCreateOpen(true)}
+              className="inline-flex items-center gap-2 rounded-full bg-[#0F141F] text-white px-5 py-3 text-sm font-semibold"
+            >
+              <PlusCircle className="w-4 h-4" />
+              New Template
+            </button>
+
+            <button
+              className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-white border border-slate-200"
               aria-label="Notifications"
             >
               <Bell className="w-5 h-5 text-slate-700" />
@@ -309,7 +355,7 @@ const TemplateLibrary: React.FC = () => {
               <div className="mt-6 flex items-center justify-between">
                 <p className="text-xs font-semibold text-slate-400 tracking-widest">TEMPLATES</p>
                 <button
-                  onClick={() => router.push('/templates/create')}
+                  onClick={() => setCreateOpen(true)}
                   className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900"
                 >
                   <Plus className="w-4 h-4" />
@@ -518,6 +564,79 @@ const TemplateLibrary: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Create modal */}
+      {createOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => !createBusy && setCreateOpen(false)} />
+          <div className="relative w-[92vw] max-w-lg rounded-3xl bg-white border border-slate-200 p-6 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-extrabold text-slate-900">New Template</h3>
+              <button className="text-slate-500 hover:text-slate-800" onClick={() => !createBusy && setCreateOpen(false)} aria-label="Close">
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <label className="text-sm font-semibold text-slate-700">Name</label>
+                <input
+                  value={createName}
+                  onChange={(e) => setCreateName(e.target.value)}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-rose-200"
+                  placeholder="e.g. Standard MSA"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700">Type</label>
+                <div className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-center justify-between">
+                  <select
+                    value={createType}
+                    onChange={(e) => setCreateType(e.target.value)}
+                    className="w-full bg-transparent outline-none text-sm text-slate-900"
+                  >
+                    <option value="NDA">NDA</option>
+                    <option value="MSA">MSA</option>
+                    <option value="EMPLOYMENT">Employment</option>
+                    <option value="AGENCY_AGREEMENT">Agency Agreement</option>
+                    <option value="PROPERTY_MANAGEMENT">Property Management</option>
+                    <option value="SERVICE_AGREEMENT">Service Agreement</option>
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700">Description</label>
+                <textarea
+                  value={createDescription}
+                  onChange={(e) => setCreateDescription(e.target.value)}
+                  className="mt-2 w-full min-h-[96px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-rose-200"
+                  placeholder="Short summary (optional)"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center gap-3">
+              <button
+                className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+                onClick={() => setCreateOpen(false)}
+                disabled={createBusy}
+              >
+                Cancel
+              </button>
+              <button
+                className="flex-1 rounded-2xl bg-[#0F141F] px-4 py-3 text-sm font-semibold text-white"
+                onClick={createTemplate}
+                disabled={createBusy}
+              >
+                {createBusy ? 'Creating…' : 'Create Template'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 };

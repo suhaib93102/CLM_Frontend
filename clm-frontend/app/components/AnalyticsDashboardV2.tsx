@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import DashboardLayout from './DashboardLayout';
 import { useRouter } from 'next/navigation';
+import { Bell, Search } from 'lucide-react';
 
 interface IndexingMetrics {
   totalIndexSize: string;
@@ -117,14 +118,24 @@ const AnalyticsDashboard: React.FC = () => {
   };
 
   return (
-    <DashboardLayout
-      title="System Analytics"
-      description="Monitor indexing setup and pipeline configuration"
-      breadcrumbs={[
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Analytics' },
-      ]}
-    >
+    <DashboardLayout>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900">System Analytics</h1>
+        <div className="flex items-center gap-3">
+          <div className="relative hidden sm:block">
+            <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            <input
+              placeholder="Search analytics..."
+              className="w-[320px] bg-white border border-slate-200 rounded-full pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-200"
+            />
+          </div>
+          <button className="w-11 h-11 rounded-full bg-white border border-slate-200 inline-flex items-center justify-center" aria-label="Notifications">
+            <Bell className="w-5 h-5 text-slate-700" />
+          </button>
+        </div>
+      </div>
+
       {/* Top Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {/* Metric Card 1 */}
