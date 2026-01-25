@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/lib/auth-context';
 import {
   BarChart3,
+  CalendarDays,
   CheckSquare,
   FileText,
   Files,
@@ -87,6 +88,12 @@ const SidebarV2: React.FC<SidebarV2Props> = ({ mobileOpen = false, onMobileOpenC
       href: '/uploads',
       icon: <Lock className="w-5 h-5" />,
       activePaths: ['/uploads'],
+    },
+    {
+      name: 'Calendar',
+      href: '/calendar',
+      icon: <CalendarDays className="w-5 h-5" />,
+      activePaths: ['/calendar'],
     },
     {
       name: 'Analytics',

@@ -157,6 +157,21 @@ export interface PrivateUploadUrlResponse {
   expires_in: number
 }
 
+export interface CalendarEvent {
+  id: string
+  title: string
+  summary?: string
+  description?: string
+  start_datetime: string
+  end_datetime: string
+  all_day: boolean
+  category: 'renewal' | 'expiry' | 'meeting'
+  associated_contract_id?: string | null
+  associated_contract_title?: string
+  created_at?: string
+  updated_at?: string
+}
+
 export class ApiClient {
   private baseUrl: string
   private token: string | null = null
@@ -618,6 +633,24 @@ export class ApiClient {
     const form = new FormData()
     form.append('file', file)
     return this.multipartRequest('POST', `${ApiClient.API_V1_PREFIX}/private-uploads/`, form)
+  }
+
+  // ==================== CALENDAR EVENTS ====================
+  async listCalendarEvents(params: { start: string; end: string }): Promise<ApiResponse<{ results: CalendarEvent[] }>> {
+    const qs = new URLSearchParams({ start: params.start, end: params.end }).toString()
+    return this.request('GET', `${ApiClient.API_V1_PREFIX}/events/?${qs}`)
+  }
+
+  async createCalendarEvent(data: Partial<CalendarEvent>): Promise<ApiResponse<CalendarEvent>> {
+    return this.request('POST', `${ApiClient.API_V1_PREFIX}/events/`, data)
+  }
+
+  async updateCalendarEvent(id: string, data: Partial<CalendarEvent>): Promise<ApiResponse<CalendarEvent>> {
+    return this.request('PATCH', `${ApiClient.API_V1_PREFIX}/events/${id}/`, data)
+  }
+
+  async deleteCalendarEvent(id: string): Promise<ApiResponse> {
+    return this.request('DELETE', `${ApiClient.API_V1_PREFIX}/events/${id}/`)
   }
 
   // ==================== SEARCH ====================

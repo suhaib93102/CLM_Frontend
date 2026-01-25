@@ -1,909 +1,395 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/app/lib/auth-context'
-import {
-  templateAPI,
-  tokenManager,
-  TemplateTypeInfo,
-  TemplateCreateRequest,
-} from '@/app/lib/api'
-import { 
-  FileText, 
-  Plus, 
-  Search, 
-  Eye, 
-  Download, 
-  X, 
-  CheckCircle, 
-  AlertCircle,
-  FileCheck,
-  Briefcase,
-  Users,
-  Home,
-  ShoppingCart,
-  Shield,
-  FileSignature,
-  Loader2
-} from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import Sidebar from './Sidebar'
 
-const TEMPLATE_TYPES = [
-  'NDA',
-  'MSA',
-  'EMPLOYMENT',
-  'SERVICE_AGREEMENT',
-  'AGENCY_AGREEMENT',
-  'PROPERTY_MANAGEMENT',
-  'PURCHASE_AGREEMENT',
-] as const
+type IconProps = React.SVGProps<SVGSVGElement> & { title?: string }
 
-type TemplateType = typeof TEMPLATE_TYPES[number]
-
-const templateIcons: Record<string, any> = {
-  NDA: Shield,
-  MSA: FileSignature,
-  EMPLOYMENT: Users,
-  SERVICE_AGREEMENT: Briefcase,
-  AGENCY_AGREEMENT: FileCheck,
-  PROPERTY_MANAGEMENT: Home,
-  PURCHASE_AGREEMENT: ShoppingCart,
-}
-
-const templateColors: Record<string, string> = {
-  NDA: 'from-blue-500 to-blue-600',
-  MSA: 'from-purple-500 to-purple-600',
-  EMPLOYMENT: 'from-green-500 to-green-600',
-  SERVICE_AGREEMENT: 'from-orange-500 to-orange-600',
-  AGENCY_AGREEMENT: 'from-pink-500 to-pink-600',
-  PROPERTY_MANAGEMENT: 'from-indigo-500 to-indigo-600',
-  PURCHASE_AGREEMENT: 'from-red-500 to-red-600',
-}
-
-export default function TemplatesPageNew() {
-  const router = useRouter()
-  const { isAuthenticated, isLoading: authLoading } = useAuth()
-
-  const [templateTypes, setTemplateTypes] = useState<Record<string, TemplateTypeInfo>>({})
-  const [createdTemplates, setCreatedTemplates] = useState<any[]>([])
-  const [selectedType, setSelectedType] = useState<TemplateType | null>(null)
-  const [selectedTypeDetail, setSelectedTypeDetail] = useState<TemplateTypeInfo | null>(null)
-  const [previewTemplate, setPreviewTemplate] = useState<any>(null)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [successMessage, setSuccessMessage] = useState('')
-  
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showDetailModal, setShowDetailModal] = useState(false)
-  const [showPreviewModal, setShowPreviewModal] = useState(false)
-  
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    status: 'draft' as 'draft' | 'published',
-    data: {} as Record<string, any>,
-  })
-  
-  const [validationErrors, setValidationErrors] = useState<string[]>([])
-  const [isValidating, setIsValidating] = useState(false)
-  const [isCreating, setIsCreating] = useState(false)
-
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/')
-    }
-  }, [isAuthenticated, authLoading, router])
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadAllData()
-    }
-  }, [isAuthenticated])
-
-  const loadAllData = async () => {
-    await Promise.all([
-      fetchTemplateTypes(),
-      fetchCreatedTemplates()
-    ])
+function createIcon(pathD: string) {
+  return function Icon({ className, title, ...props }: IconProps) {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+        aria-hidden={title ? undefined : true}
+        role={title ? 'img' : 'presentation'}
+        {...props}
+      >
+        {title ? <title>{title}</title> : null}
+        <path d={pathD} />
+      </svg>
+    )
   }
+}
+
+const IconFileText = createIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8')
+const IconDownload = createIcon('M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3')
+const IconEye = createIcon('M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12 M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6')
+const IconX = createIcon('M18 6 6 18 M6 6l12 12')
+const IconLoader = createIcon('M21 12a9 9 0 1 1-6.219-8.56')
+const IconAlertCircle = createIcon('M12 8v4 M12 16h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0')
+
+const IconShield = createIcon('M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10')
+const IconFileSignature = createIcon('M20 19h-4 M14 20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8l6 6v4 M18 10V8h-2 M6 12h8 M6 16h6')
+const IconUsers = createIcon('M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75')
+const IconBriefcase = createIcon('M16 20V4a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v16 M4 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2')
+const IconFileCheck = createIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M9 15l2 2 4-4')
+const IconHome = createIcon('M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10')
+const IconShoppingCart = createIcon('M6 6h15l-1.5 9h-13z M6 6 5 3H2 M6 15a2 2 0 1 0 0 4 2 2 0 0 0 0-4 M18 15a2 2 0 1 0 0 4 2 2 0 0 0 0-4')
+
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+interface TemplateType {
+  display_name: string
+  description: string
+  required_fields_count?: number
+  optional_fields_count?: number
+  icon?: string
+}
+
+interface TemplateFileContent {
+  success: boolean
+  template_type: string
+  filename: string
+  content: string
+  size: number
+}
+
+interface TemplateTypesResponse {
+  success: boolean
+  total_types: number
+  template_types: Record<string, TemplateType>
+}
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000/api/v1'
+
+const TEMPLATE_ICONS: Record<string, React.ReactNode> = {
+  NDA: <IconShield className="w-6 h-6" />,
+  MSA: <IconFileSignature className="w-6 h-6" />,
+  EMPLOYMENT: <IconUsers className="w-6 h-6" />,
+  SERVICE_AGREEMENT: <IconBriefcase className="w-6 h-6" />,
+  AGENCY_AGREEMENT: <IconFileCheck className="w-6 h-6" />,
+  PROPERTY_MANAGEMENT: <IconHome className="w-6 h-6" />,
+  PURCHASE_AGREEMENT: <IconShoppingCart className="w-6 h-6" />,
+}
+
+const TEMPLATE_COLORS: Record<string, string> = {
+  NDA: 'from-blue-500 to-indigo-600',
+  MSA: 'from-purple-500 to-pink-600',
+  EMPLOYMENT: 'from-green-500 to-emerald-600',
+  SERVICE_AGREEMENT: 'from-orange-500 to-red-600',
+  AGENCY_AGREEMENT: 'from-cyan-500 to-blue-600',
+  PROPERTY_MANAGEMENT: 'from-amber-500 to-orange-600',
+  PURCHASE_AGREEMENT: 'from-rose-500 to-pink-600',
+}
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
+interface TemplatesPageNewProps {
+  onLogout?: () => void
+}
+
+export default function TemplatesPageNew({ onLogout }: TemplatesPageNewProps) {
+  // State management
+  const [templateTypes, setTemplateTypes] = useState<Record<string, TemplateType>>({})
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
+  const [templateContent, setTemplateContent] = useState<TemplateFileContent | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [contentLoading, setContentLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
+
+  // ============================================================================
+  // DATA FETCHING
+  // ============================================================================
+
+  useEffect(() => {
+    fetchTemplateTypes()
+  }, [])
 
   const fetchTemplateTypes = async () => {
     try {
-      setIsLoading(true)
-      const token = tokenManager.getAccessToken()
-      if (!token) return
+      setLoading(true)
+      setError(null)
 
-      const response = await templateAPI.getAllTemplateTypes(token)
-      setTemplateTypes(response.template_types)
-    } catch (err: any) {
-      setError(err.message || 'Failed to load template types')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const fetchCreatedTemplates = async () => {
-    try {
-      const token = tokenManager.getAccessToken()
-      if (!token) return
-
-      const templates = await templateAPI.getTemplates(token)
-      setCreatedTemplates(templates)
-    } catch (err: any) {
-      console.error('Failed to load created templates:', err)
-    }
-  }
-
-  const handleTemplateTypeClick = async (templateType: TemplateType) => {
-    try {
-      setError('')
-      const token = tokenManager.getAccessToken()
-      if (!token) return
-
-      const detail = await templateAPI.getTemplateTypeDetail(token, templateType)
-      setSelectedTypeDetail(detail)
-      setShowDetailModal(true)
-    } catch (err: any) {
-      setError(err.message || 'Failed to load template details')
-    }
-  }
-
-  const handleCreateFromType = (templateType: TemplateType) => {
-    const typeInfo = templateTypes[templateType]
-    if (!typeInfo) return
-
-    const initialData: Record<string, any> = {}
-    typeInfo.required_fields.forEach((field) => {
-      initialData[field.name] = typeInfo.sample_data?.[field.name] || ''
-    })
-
-    setSelectedType(templateType)
-    setSelectedTypeDetail(typeInfo)
-    setFormData({
-      name: '',
-      description: '',
-      status: 'draft',
-      data: initialData,
-    })
-    setValidationErrors([])
-    setShowDetailModal(false)
-    setShowCreateModal(true)
-  }
-
-  const validateTemplateData = async (): Promise<boolean> => {
-    if (!selectedType) return false
-
-    try {
-      setIsValidating(true)
-      setValidationErrors([])
-      const token = tokenManager.getAccessToken()
-      if (!token) return false
-
-      const response = await templateAPI.validateTemplateData(token, {
-        template_type: selectedType,
-        data: formData.data,
-      })
-
-      if (!response.is_valid) {
-        setValidationErrors(response.missing_fields)
-        return false
+      const response = await fetch(`${API_BASE_URL}/templates/types/`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Failed to fetch templates`)
       }
 
-      return true
+      const data: TemplateTypesResponse = await response.json()
+
+      if (data.success) {
+        setTemplateTypes(data.template_types)
+      } else {
+        throw new Error('Failed to load templates')
+      }
     } catch (err: any) {
-      setError(err.message || 'Validation failed')
-      return false
+      console.error('Error fetching templates:', err)
+      setError(err.message || 'Failed to load templates')
     } finally {
-      setIsValidating(false)
+      setLoading(false)
     }
   }
 
-  const handleCreateTemplate = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!selectedType) {
-      setError('No template type selected')
-      return
-    }
-
-    setError('')
-    setSuccessMessage('')
-
-    const isValid = await validateTemplateData()
-    if (!isValid) {
-      setError('Please fill in all required fields')
-      return
-    }
-
+  const fetchTemplateContent = async (templateType: string) => {
     try {
-      setIsCreating(true)
-      const token = tokenManager.getAccessToken()
-      if (!token) {
-        setError('Authentication required')
-        return
+      setContentLoading(true)
+      setError(null)
+
+      const response = await fetch(`${API_BASE_URL}/templates/files/${templateType}/`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Failed to fetch template content`)
       }
 
-      const response = await templateAPI.createTemplateFromType(token, {
-        template_type: selectedType,
-        name: formData.name,
-        description: formData.description,
-        status: formData.status,
-        data: formData.data,
-      })
+      const data: TemplateFileContent = await response.json()
 
-      setSuccessMessage(`Template "${response.name}" created successfully!`)
-      setShowCreateModal(false)
-      
-      await fetchCreatedTemplates()
-      
-      setFormData({
-        name: '',
-        description: '',
-        status: 'draft',
-        data: {},
-      })
-      setSelectedType(null)
-      
-      setTimeout(() => setSuccessMessage(''), 5000)
+      if (data.success) {
+        setTemplateContent(data)
+        setSelectedTemplate(templateType)
+        setShowPreviewModal(true)
+      } else {
+        throw new Error('Failed to load template content')
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to create template')
+      console.error('Error fetching template content:', err)
+      setError(err.message || 'Failed to load template content')
     } finally {
-      setIsCreating(false)
+      setContentLoading(false)
     }
   }
 
-  const handlePreview = async (template: any) => {
-    setPreviewTemplate(template)
-    setShowPreviewModal(true)
+  // ============================================================================
+  // ACTIONS
+  // ============================================================================
+
+  const handlePreview = (templateType: string) => {
+    fetchTemplateContent(templateType)
   }
 
-  const handleDownload = async (template: any) => {
-    try {
-      const token = tokenManager.getAccessToken()
-      if (!token) return
+  const handleDownload = () => {
+    if (!templateContent) return
 
-      const content = `Template: ${template.name}\n\nType: ${template.contract_type}\n\nDescription: ${template.description || 'N/A'}\n\nContent:\n${JSON.stringify(template, null, 2)}`
-      
-      const blob = new Blob([content], { type: 'text/plain' })
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${template.name.replace(/\s+/g, '_')}.txt`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      window.URL.revokeObjectURL(url)
-      
-      setSuccessMessage('Template downloaded successfully!')
-      setTimeout(() => setSuccessMessage(''), 3000)
-    } catch (err: any) {
-      setError(err.message || 'Failed to download template')
-    }
+    const blob = new Blob([templateContent.content], { type: 'text/plain' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = templateContent.filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
   }
 
-  const filteredTypes = TEMPLATE_TYPES.filter(type => {
-    const typeInfo = templateTypes[type]
-    if (!typeInfo) return false
-    return typeInfo.display_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           typeInfo.description.toLowerCase().includes(searchQuery.toLowerCase())
-  })
+  const closePreviewModal = () => {
+    setShowPreviewModal(false)
+    setSelectedTemplate(null)
+    setTemplateContent(null)
+  }
 
-  const filteredCreatedTemplates = createdTemplates.filter(template => 
-    template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    template.contract_type?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  // ============================================================================
+  // RENDER HELPERS
+  // ============================================================================
 
-  if (authLoading || isLoading) {
+  const getTemplateIcon = (templateType: string) => {
+    return TEMPLATE_ICONS[templateType] || <IconFileText className="w-6 h-6" />
+  }
+
+  const getTemplateColor = (templateType: string) => {
+    return TEMPLATE_COLORS[templateType] || 'from-gray-500 to-gray-600'
+  }
+
+  // ============================================================================
+  // RENDER
+  // ============================================================================
+
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
-        <div className="text-center">
-          <Loader2 className="w-16 h-16 text-purple-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 text-lg">Loading templates...</p>
-        </div>
+      <div className="min-h-screen bg-[#F2F0EB]">
+        <Sidebar onLogout={onLogout} />
+        <main className="ml-0 lg:ml-[90px] min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <IconLoader className="w-12 h-12 animate-spin text-pink-500 mx-auto mb-4" />
+            <p className="text-gray-600 font-medium">Loading Templates...</p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (error && Object.keys(templateTypes).length === 0) {
+    return (
+      <div className="min-h-screen bg-[#F2F0EB]">
+        <Sidebar onLogout={onLogout} />
+        <main className="ml-0 lg:ml-[90px] min-h-screen flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 bg-red-100 rounded-full">
+                <IconAlertCircle className="w-8 h-8 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Error Loading Templates</h2>
+                <p className="text-sm text-gray-600 mt-1">{error}</p>
+              </div>
+            </div>
+            <button
+              onClick={fetchTemplateTypes}
+              className="w-full mt-6 px-4 py-3 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-lg font-medium hover:shadow-lg transition"
+            >
+              Retry
+            </button>
+          </div>
+        </main>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#F2F0EB]">
+      <Sidebar onLogout={onLogout} />
+      <main className="ml-0 lg:ml-[90px] min-h-screen">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex items-center justify-between mb-6">
+      <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Template Repository</h1>
-              <p className="text-sm text-gray-500 mt-1">
-                View and manage all active agreements across the organization
+              <h1 className="text-3xl font-bold text-gray-900">Contract Templates</h1>
+              <p className="text-gray-600 mt-1">
+                View and download pre-built contract templates
               </p>
             </div>
-            <button
-              onClick={() => {
-                // Auto-select first template type for creation
-                if (TEMPLATE_TYPES.length > 0) {
-                  handleCreateFromType(TEMPLATE_TYPES[0])
-                }
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-lg hover:shadow-lg transition font-medium"
-            >
-              <Plus className="w-4 h-4" />
-              Create Template
-            </button>
-          </div>
-
-          {/* Search and Filters */}
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by name, counterparty, or ID..."
-                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-              />
+            <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-lg">
+              <IconFileText className="w-5 h-5" />
+              <span className="font-semibold">{Object.keys(templateTypes).length} Templates</span>
             </div>
-            <button className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-              </svg>
-              Advanced Filters
-            </button>
           </div>
         </div>
       </div>
 
-      {/* Messages */}
-      {error && (
-        <div className="max-w-7xl mx-auto px-6 pt-4">
-          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
-            <div className="flex items-start">
-              <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 mr-3" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-red-800">Connection Error</p>
-                <p className="text-sm text-red-700 mt-1">{error}</p>
-                <p className="text-xs text-red-600 mt-2">Please ensure the backend server is running on port 8000</p>
-              </div>
-              <button onClick={() => setError('')} className="text-red-400 hover:text-red-600">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {successMessage && (
-        <div className="max-w-7xl mx-auto px-6 pt-4">
-          <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded">
-            <div className="flex items-start">
-              <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 mr-3" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-green-800">Success</p>
-                <p className="text-sm text-green-700 mt-1">{successMessage}</p>
-              </div>
-              <button onClick={() => setSuccessMessage('')} className="text-green-400 hover:text-green-600">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        {/* Template Types Grid */}
-        <div className="mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredTypes.map((type) => {
-              const typeInfo = templateTypes[type]
-              if (!typeInfo) return null
-
-              const Icon = templateIcons[type] || FileText
-              const colorClass = templateColors[type]
-
-              return (
-                <div
-                  key={type}
-                  onClick={() => handleTemplateTypeClick(type)}
-                  className="relative bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition cursor-pointer group"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className={`w-10 h-10 bg-gradient-to-br ${colorClass} rounded-lg flex items-center justify-center`}>
-                      <Icon className="w-5 h-5 text-white" />
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleCreateFromType(type)
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-pink-600 hover:bg-pink-50 rounded transition"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                  
-                  <h3 className="text-sm font-semibold text-gray-900 mb-1">
-                    {typeInfo.display_name}
-                  </h3>
-                  <p className="text-xs text-gray-500 line-clamp-2 mb-3">
-                    {typeInfo.description}
-                  </p>
-                  
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-400">
-                      {typeInfo.required_fields.length} fields
-                    </span>
-                    <span className="text-pink-600 font-medium opacity-0 group-hover:opacity-100 transition">
-                      View →
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Created Templates Section */}
-        {createdTemplates.length > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200">
-            {/* Table Header */}
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-500">
-                  Showing {filteredCreatedTemplates.length} of {createdTemplates.length} templates
-                </p>
-              </div>
-            </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Template Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Owner
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Last Updated
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredCreatedTemplates.map((template) => {
-                    const Icon = templateIcons[template.contract_type?.toUpperCase()] || FileText
-                    const colorClass = templateColors[template.contract_type?.toUpperCase()] || 'from-gray-500 to-gray-600'
-                    
-                    // Status badge styling
-                    const statusStyles = {
-                      'published': 'bg-green-100 text-green-700',
-                      'active': 'bg-green-100 text-green-700',
-                      'draft': 'bg-yellow-100 text-yellow-700',
-                      'review': 'bg-orange-100 text-orange-700',
-                      'expired': 'bg-red-100 text-red-700',
-                      'archived': 'bg-gray-100 text-gray-700',
-                    }
-                    
-                    return (
-                      <tr key={template.id} className="hover:bg-gray-50 transition">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 bg-gradient-to-br ${colorClass} rounded flex items-center justify-center flex-shrink-0`}>
-                              <Icon className="w-4 h-4 text-white" />
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{template.name}</div>
-                              <div className="text-xs text-gray-500">
-                                ID: {template.id?.toString().substring(0, 8)}...
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            statusStyles[template.status as keyof typeof statusStyles] || statusStyles.draft
-                          }`}>
-                            {template.status || 'Draft'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 bg-gray-300 rounded-full flex items-center justify-center">
-                              <Users className="w-3 h-3 text-gray-600" />
-                            </div>
-                            <span className="text-sm text-gray-900">System</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {template.created_at ? new Date(template.created_at).toLocaleDateString('en-US', { 
-                            month: 'short', 
-                            day: 'numeric', 
-                            year: 'numeric' 
-                          }) : 'N/A'}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => handlePreview(template)}
-                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition"
-                              title="Preview"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDownload(template)}
-                              className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition"
-                              title="Download"
-                            >
-                              <Download className="w-4 h-4" />
-                            </button>
-                            <button className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded transition">
-                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                              </svg>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <button className="w-8 h-8 flex items-center justify-center rounded border border-gray-300 hover:bg-gray-50 transition bg-pink-500 text-white border-pink-500">
-                  1
-                </button>
-                <button className="w-8 h-8 flex items-center justify-center rounded border border-gray-300 hover:bg-gray-50 transition">
-                  2
-                </button>
-                <button className="w-8 h-8 flex items-center justify-center rounded border border-gray-300 hover:bg-gray-50 transition">
-                  3
-                </button>
-                <button className="w-8 h-8 flex items-center justify-center rounded border border-gray-300 hover:bg-gray-50 transition">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error && (
+          <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
+            <div className="flex items-center gap-3">
+              <IconAlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+              <p className="text-sm text-red-700">{error}</p>
             </div>
           </div>
         )}
+
+        {/* Template Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Object.entries(templateTypes).map(([templateType, template]) => (
+            <div
+              key={templateType}
+              className="bg-white rounded-xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 group"
+            >
+              {/* Card Header */}
+              <div className={`bg-gradient-to-r ${getTemplateColor(templateType)} p-6 text-white`}>
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-white/20 rounded-lg backdrop-blur-sm">
+                    {getTemplateIcon(templateType)}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold">{template.display_name}</h3>
+                    <p className="text-xs text-white/80 mt-1">{templateType}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card Body */}
+              <div className="p-6">
+                <p className="text-sm text-gray-600 line-clamp-3 mb-4">
+                  {template.description}
+                </p>
+
+                {/* Actions */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handlePreview(templateType)}
+                    disabled={contentLoading && selectedTemplate === templateType}
+                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-medium hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {contentLoading && selectedTemplate === templateType ? (
+                      <>
+                        <IconLoader className="w-4 h-4 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <IconEye className="w-4 h-4" />
+                        Preview
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Template Detail Modal */}
-      {showDetailModal && selectedTypeDetail && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="bg-gradient-to-r from-pink-500 to-rose-500 px-6 py-4 flex items-center justify-between text-white">
-              <div>
-                <h2 className="text-xl font-bold">{selectedTypeDetail.display_name}</h2>
-                <p className="text-pink-100 text-sm mt-1">{selectedTypeDetail.description}</p>
-              </div>
-              <button
-                onClick={() => setShowDetailModal(false)}
-                className="p-1.5 hover:bg-white/20 rounded transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="mb-6">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                  Contract Type
-                </h3>
-                <span className="inline-flex items-center px-3 py-1.5 rounded-md bg-pink-100 text-pink-800 text-sm font-medium">
-                  {selectedTypeDetail.contract_type}
-                </span>
-              </div>
-
-              <div className="mb-6">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                  Required Fields ({selectedTypeDetail.required_fields.length})
-                </h3>
-                <div className="space-y-2">
-                  {selectedTypeDetail.required_fields.map((field, index) => (
-                    <div key={index} className="bg-red-50 border-l-4 border-red-500 p-3 rounded">
-                      <div className="flex items-start gap-2">
-                        <span className="text-red-600 font-bold text-sm">*</span>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900 text-sm">{field.name}</div>
-                          <div className="text-xs text-gray-600 mt-1">{field.description}</div>
-                          <div className="text-xs text-gray-500 mt-1">Type: {field.type}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {selectedTypeDetail.optional_fields.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                    Optional Fields ({selectedTypeDetail.optional_fields.length})
-                  </h3>
-                  <div className="space-y-2">
-                    {selectedTypeDetail.optional_fields.map((field, index) => (
-                      <div key={index} className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
-                        <div className="font-medium text-gray-900 text-sm">{field.name}</div>
-                        <div className="text-xs text-gray-600 mt-1">{field.description}</div>
-                        <div className="text-xs text-gray-500 mt-1">Type: {field.type}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {selectedTypeDetail.mandatory_clauses.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                    Mandatory Clauses ({selectedTypeDetail.mandatory_clauses.length})
-                  </h3>
-                  <div className="space-y-2">
-                    {selectedTypeDetail.mandatory_clauses.map((clause, index) => (
-                      <div key={index} className="bg-green-50 border-l-4 border-green-500 p-3 rounded">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle className="w-4 h-4 text-green-600" />
-                          <span className="text-gray-900 font-medium text-sm">{clause}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex gap-3">
-              <button
-                onClick={() => {
-                  if (selectedType) handleCreateFromType(selectedType)
-                }}
-                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-lg font-medium hover:shadow-lg transition flex items-center justify-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Create Template
-              </button>
-              <button
-                onClick={() => setShowDetailModal(false)}
-                className="px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create Template Modal */}
-      {showCreateModal && selectedType && selectedTypeDetail && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="bg-gradient-to-r from-pink-500 to-rose-500 px-6 py-4 flex items-center justify-between text-white">
-              <div>
-                <h2 className="text-xl font-bold">Create {selectedTypeDetail.display_name}</h2>
-                <p className="text-pink-100 text-sm mt-1">Fill in the required information</p>
-              </div>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="p-1.5 hover:bg-white/20 rounded transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateTemplate} className="flex-1 overflow-y-auto p-6">
-              <div className="mb-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Basic Information</h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Template Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                      placeholder="e.g., Standard NDA Template"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Description
-                    </label>
-                    <textarea
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      rows={3}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
-                      placeholder="Brief description of this template..."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Status <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value as 'draft' | 'published' })}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                    >
-                      <option value="draft">Draft</option>
-                      <option value="published">Published</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Template Data</h3>
-                
-                <div className="space-y-4">
-                  {selectedTypeDetail.required_fields.map((field, index) => (
-                    <div key={index}>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                        {field.name} <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.data[field.name] || ''}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          data: { ...formData.data, [field.name]: e.target.value }
-                        })}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                        placeholder={field.description}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">{field.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {validationErrors.length > 0 && (
-                <div className="mb-6">
-                  <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-red-800 mb-2">Missing Required Fields:</p>
-                        <ul className="list-disc list-inside text-sm text-red-700 space-y-1">
-                          {validationErrors.map((error, index) => (
-                            <li key={index}>{error}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </form>
-
-            <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex gap-3">
-              <button
-                type="submit"
-                disabled={isCreating || isValidating}
-                onClick={handleCreateTemplate}
-                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-lg font-medium hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isCreating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4" />
-                    Create Template
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                disabled={isCreating}
-                className="px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition disabled:opacity-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Preview Modal */}
-      {showPreviewModal && previewTemplate && (
+      {showPreviewModal && templateContent && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="bg-gradient-to-r from-pink-500 to-rose-500 px-6 py-4 flex items-center justify-between text-white">
-              <div>
-                <h2 className="text-xl font-bold">{previewTemplate.name}</h2>
-                <p className="text-pink-100 text-sm mt-1">Template Preview</p>
+          <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+            {/* Modal Header */}
+            <div className={`bg-gradient-to-r ${getTemplateColor(selectedTemplate!)} px-6 py-4 flex items-center justify-between text-white`}>
+              <div className="flex items-center gap-3">
+                {getTemplateIcon(selectedTemplate!)}
+                <div>
+                  <h2 className="text-xl font-bold">
+                    {templateTypes[selectedTemplate!]?.display_name}
+                  </h2>
+                  <p className="text-sm text-white/80 mt-0.5">{templateContent.filename}</p>
+                </div>
               </div>
               <button
-                onClick={() => setShowPreviewModal(false)}
-                className="p-1.5 hover:bg-white/20 rounded transition"
+                onClick={closePreviewModal}
+                className="p-2 hover:bg-white/20 rounded-lg transition"
               >
-                <X className="w-5 h-5" />
+                <IconX className="w-6 h-6" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="space-y-6">
-                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Template Information</h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-600">Type:</span>
-                      <span className="ml-2 font-medium text-gray-900">{previewTemplate.contract_type}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Status:</span>
-                      <span className={`ml-2 font-medium ${
-                        previewTemplate.status === 'published' ? 'text-green-600' : 'text-yellow-600'
-                      }`}>
-                        {previewTemplate.status}
-                      </span>
-                    </div>
-                    {previewTemplate.created_at && (
-                      <div className="col-span-2">
-                        <span className="text-gray-600">Created:</span>
-                        <span className="ml-2 font-medium text-gray-900">
-                          {new Date(previewTemplate.created_at).toLocaleString()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {previewTemplate.description && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-2">Description</h3>
-                    <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-4 border border-gray-200">
-                      {previewTemplate.description}
-                    </p>
-                  </div>
-                )}
-
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Template Data</h3>
-                  <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-                    <pre className="text-green-400 text-xs font-mono whitespace-pre-wrap">
-                      {JSON.stringify(previewTemplate, null, 2)}
-                    </pre>
-                  </div>
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-8 bg-gray-50">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+                <div className="prose max-w-none">
+                  <pre className="whitespace-pre-wrap font-mono text-sm text-gray-800 leading-relaxed">
+                    {templateContent.content}
+                  </pre>
                 </div>
               </div>
             </div>
 
+            {/* Modal Footer */}
             <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex gap-3">
               <button
-                onClick={() => handleDownload(previewTemplate)}
-                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-medium hover:shadow-lg transition flex items-center justify-center gap-2"
+                onClick={handleDownload}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-medium hover:shadow-lg transition flex items-center justify-center gap-2"
               >
-                <Download className="w-4 h-4" />
+                <IconDownload className="w-5 h-5" />
                 Download Template
               </button>
               <button
-                onClick={() => setShowPreviewModal(false)}
-                className="px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition"
+                onClick={closePreviewModal}
+                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition"
               >
                 Close
               </button>
@@ -911,6 +397,7 @@ export default function TemplatesPageNew() {
           </div>
         </div>
       )}
+      </main>
     </div>
   )
 }

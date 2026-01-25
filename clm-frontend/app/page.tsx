@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/app/lib/auth-context'
 
-export default function LoginPage() {
+export default function HomePage() {
   const router = useRouter()
   const { login, isLoading, error, clearError, isAuthenticated } = useAuth()
+  const [showLogin, setShowLogin] = useState(false)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -46,165 +47,324 @@ export default function LoginPage() {
 
   const displayError = localError || error
 
-  return (
-    <div className="flex h-screen bg-white">
-      {/* Left Panel - Gradient */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-purple-600 via-purple-500 to-pink-500 relative overflow-hidden flex-col justify-between p-12">
-        {/* Animated Background Blobs */}
-        <div className="absolute top-0 left-0 w-96 h-96 bg-white opacity-10 rounded-full mix-blend-multiply filter blur-3xl animate-blob"></div>
-        <div className="absolute top-0 right-0 w-96 h-96 bg-pink-300 opacity-10 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-2000"></div>
-        <div className="absolute -bottom-8 left-20 w-96 h-96 bg-purple-300 opacity-10 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-4000"></div>
+  if (showLogin) {
+    return (
+      <div className="flex h-screen bg-white">
+        {/* Left Section - Login Form */}
+        <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12">
+          <div className="w-full max-w-md">
+            <div className="mb-8">
+              <button
+                onClick={() => setShowLogin(false)}
+                className="text-gray-500 hover:text-gray-700 mb-6 flex items-center gap-2"
+              >
+                ← Back
+              </button>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
+              <p className="text-gray-600">Sign in to your account</p>
+            </div>
 
-        {/* Content */}
-        <div className="relative z-10">
-          <h1 className="text-6xl font-bold text-white mb-6 leading-tight">
-            Welcome to CLM
-          </h1>
-          <p className="text-xl text-white/80 leading-relaxed max-w-md">
-            Contract Lifecycle Management made simple. Streamline your contract workflows, track approvals, and maintain compliance with our intelligent platform.
-          </p>
+            {displayError && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-700 text-sm">{displayError}</p>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 border-gray-300 rounded"
+                  />
+                  <span className="ml-2 text-sm text-gray-600">Remember me</span>
+                </label>
+                <Link href="/forgot-password" className="text-sm text-indigo-600 hover:text-indigo-700">
+                  Forgot password?
+                </Link>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50"
+              >
+                {isLoading ? 'Signing in...' : 'Sign In'}
+              </button>
+            </form>
+
+            <p className="mt-6 text-center text-gray-600">
+              Don't have an account?{' '}
+              <Link href="/register" className="text-indigo-600 hover:text-indigo-700 font-semibold">
+                Sign up
+              </Link>
+            </p>
+          </div>
         </div>
 
-        {/* Glassmorphism Badge */}
-        <div className="relative z-10 inline-flex items-center px-6 py-3 rounded-full backdrop-blur-md bg-white/10 border border-white/20 text-white">
-          <div className="w-2 h-2 rounded-full bg-green-400 mr-3"></div>
-          <span className="text-sm font-medium">System Operational</span>
+        {/* Right Section - Features */}
+        <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex-col justify-center px-12">
+          <h2 className="text-4xl font-bold mb-8">Contract Management Made Easy</h2>
+          <div className="space-y-6">
+            {[
+              { icon: '📋', title: 'Smart Templates', desc: 'Pre-built contract templates' },
+              { icon: '🔍', title: 'Smart Search', desc: 'Find contracts instantly' },
+              { icon: '✅', title: 'Easy Approvals', desc: 'Streamlined workflows' }
+            ].map((feature, i) => (
+              <div key={i} className="flex gap-4">
+                <div className="text-3xl">{feature.icon}</div>
+                <div>
+                  <h3 className="font-semibold mb-1">{feature.title}</h3>
+                  <p className="text-white/80">{feature.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
+    )
+  }
 
-      {/* Right Panel - Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12 sm:px-12 lg:px-12">
-        <div className="w-full max-w-md">
-          {/* Logo for Mobile */}
-          <div className="lg:hidden mb-8 text-center">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-gradient-to-br from-purple-600 to-pink-500">
-              <span className="text-white font-bold text-2xl">C</span>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+      {/* Navigation */}
+      <nav className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
+                📋
+              </div>
+              <span className="text-xl font-bold text-gray-900">CLM System</span>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mt-4">Welcome Back</h1>
-            <p className="text-gray-600 mt-2">Sign in to access your dashboard</p>
-          </div>
-
-          {/* Desktop Heading */}
-          <div className="hidden lg:block mb-8">
-            <h2 className="text-4xl font-bold text-gray-900 mb-2">Welcome Back</h2>
-            <p className="text-gray-600">Sign in to access your dashboard</p>
-          </div>
-
-          {/* Error Message */}
-          {displayError && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
-              <p className="text-sm text-red-600">{displayError}</p>
-            </div>
-          )}
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Input */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
-                disabled={isLoading}
-              />
-            </div>
-
-            {/* Password Input */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
-                disabled={isLoading}
-              />
-            </div>
-
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                />
-                <span className="ml-2 text-sm text-gray-600">Remember me</span>
-              </label>
-              <Link
-                href="/forgot-password"
-                className="text-sm font-medium text-pink-600 hover:text-pink-700 transition"
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowLogin(true)}
+                className="px-6 py-2.5 rounded-lg text-indigo-600 hover:bg-indigo-50 font-medium transition"
               >
-                Forgot password?
+                Sign In
+              </button>
+              <Link
+                href="/register"
+                className="px-6 py-2.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium hover:shadow-lg transition"
+              >
+                Get Started
               </Link>
             </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-pink-500 hover:shadow-lg hover:opacity-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Signing in...' : 'Sign In'}
-            </button>
-
-            {/* Sign Up Link */}
-            <div className="text-center">
-              <p className="text-gray-600 text-sm">
-                Don't have an account?{' '}
-                <Link
-                  href="/register"
-                  className="font-semibold text-pink-600 hover:text-pink-700 transition"
-                >
-                  Sign up
-                </Link>
-              </p>
-            </div>
-          </form>
-
-          {/* Footer */}
-          <p className="mt-8 text-center text-xs text-gray-500">
-            © 2026 CLM System. All rights reserved.
-          </p>
+          </div>
         </div>
-      </div>
+      </nav>
 
-      <style jsx>{`
-        @keyframes blob {
-          0%, 100% {
-            transform: translate(0, 0) scale(1);
-          }
-          33% {
-            transform: translate(30px, -50px) scale(1.1);
-          }
-          66% {
-            transform: translate(-20px, 20px) scale(0.9);
-          }
-        }
+      {/* Hero Section */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+        <div className="grid md:grid-cols-2 gap-12 items-center">
+          {/* Left Content */}
+          <div>
+            <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6 leading-tight">
+              Contract <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Lifecycle</span> Management
+            </h1>
+            <p className="text-xl text-gray-600 mb-8 leading-relaxed">
+              Streamline your contract management process with our comprehensive CLM system. Track, manage, and optimize your contracts from creation to closure.
+            </p>
+            <div className="flex gap-4">
+              <Link
+                href="/register"
+                className="px-8 py-3.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold hover:shadow-xl transition"
+              >
+                Start Free Trial
+              </Link>
+              <button
+                onClick={() => setShowLogin(true)}
+                className="px-8 py-3.5 rounded-lg border-2 border-gray-300 text-gray-700 font-semibold hover:border-indigo-600 hover:text-indigo-600 transition"
+              >
+                Sign In
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 mt-4">No credit card required • 14-day free trial</p>
+          </div>
 
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
+          {/* Right Visual */}
+          <div className="relative">
+            <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-8 text-white shadow-2xl">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 bg-white/20 backdrop-blur rounded-lg p-4">
+                  <div className="w-3 h-3 bg-emerald-400 rounded-full"></div>
+                  <span className="text-sm font-medium">Contracts on track</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white/10 backdrop-blur rounded-lg p-4">
+                    <p className="text-3xl font-bold">524</p>
+                    <p className="text-white/70 text-sm">Total Contracts</p>
+                  </div>
+                  <div className="bg-white/10 backdrop-blur rounded-lg p-4">
+                    <p className="text-3xl font-bold">89%</p>
+                    <p className="text-white/70 text-sm">Approval Rate</p>
+                  </div>
+                </div>
+                <div className="bg-white/10 backdrop-blur rounded-lg p-4">
+                  <p className="text-white/70 text-xs mb-2">Recent Activity</p>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>NDA Agreement</span>
+                      <span className="text-emerald-400">✓</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Service Contract</span>
+                      <span className="text-amber-400">⏳</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
+      {/* Features Section */}
+      <section className="bg-white/50 backdrop-blur py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">Powerful Features</h2>
+            <p className="text-xl text-gray-600">Everything you need to manage contracts effectively</p>
+          </div>
 
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-      `}</style>
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              {
+                icon: '📄',
+                title: 'Smart Templates',
+                description: 'Pre-built templates for common contract types with customization options'
+              },
+              {
+                icon: '🔍',
+                title: 'Advanced Search',
+                description: 'Find contracts instantly with powerful search and filtering capabilities'
+              },
+              {
+                icon: '✅',
+                title: 'Approval Workflows',
+                description: 'Streamlined approval processes with multiple stakeholder support'
+              },
+              {
+                icon: '📊',
+                title: 'Analytics Dashboard',
+                description: 'Real-time insights into your contract portfolio and performance metrics'
+              },
+              {
+                icon: '🔐',
+                title: 'Secure Storage',
+                description: 'Enterprise-grade security with encryption and compliance standards'
+              },
+              {
+                icon: '⚡',
+                title: 'Lightning Fast',
+                description: 'High-performance platform optimized for speed and reliability'
+              }
+            ].map((feature, i) => (
+              <div key={i} className="bg-white rounded-xl p-6 shadow-md hover:shadow-lg transition">
+                <div className="text-4xl mb-4">{feature.icon}</div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">{feature.title}</h3>
+                <p className="text-gray-600">{feature.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Stats Section */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+        <div className="grid md:grid-cols-4 gap-8 text-center">
+          {[
+            { number: '10K+', label: 'Active Users' },
+            { number: '2M+', label: 'Contracts Managed' },
+            { number: '99.9%', label: 'Uptime' },
+            { number: '500+', label: 'Enterprise Clients' }
+          ].map((stat, i) => (
+            <div key={i}>
+              <div className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                {stat.number}
+              </div>
+              <p className="text-gray-600">{stat.label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-16">
+        <div className="max-w-4xl mx-auto text-center px-4">
+          <h2 className="text-4xl font-bold mb-4">Ready to transform your contract management?</h2>
+          <p className="text-lg text-white/90 mb-8">Join thousands of organizations using CLM System</p>
+          <Link
+            href="/register"
+            className="inline-block px-8 py-4 bg-white text-indigo-600 font-semibold rounded-lg hover:shadow-xl transition"
+          >
+            Get Started Free
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-gray-400 py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid md:grid-cols-4 gap-8 mb-8">
+            <div>
+              <div className="text-white font-bold mb-4">CLM System</div>
+              <p className="text-sm">Modern contract lifecycle management platform</p>
+            </div>
+            <div>
+              <div className="text-white font-semibold mb-4">Product</div>
+              <ul className="space-y-2 text-sm">
+                <li><a href="#" className="hover:text-white transition">Features</a></li>
+                <li><a href="#" className="hover:text-white transition">Pricing</a></li>
+              </ul>
+            </div>
+            <div>
+              <div className="text-white font-semibold mb-4">Company</div>
+              <ul className="space-y-2 text-sm">
+                <li><a href="#" className="hover:text-white transition">About</a></li>
+                <li><a href="#" className="hover:text-white transition">Contact</a></li>
+              </ul>
+            </div>
+            <div>
+              <div className="text-white font-semibold mb-4">Legal</div>
+              <ul className="space-y-2 text-sm">
+                <li><a href="#" className="hover:text-white transition">Privacy</a></li>
+                <li><a href="#" className="hover:text-white transition">Terms</a></li>
+              </ul>
+            </div>
+          </div>
+          <div className="border-t border-gray-800 pt-8 text-center text-sm">
+            <p>&copy; 2026 CLM System. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

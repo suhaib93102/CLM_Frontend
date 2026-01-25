@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import { ApiClient } from '../lib/api-client';
-import { CloudUpload, Download, Eye, FileText, Lock, Search, Trash2 } from 'lucide-react';
+import { UploadCloud, Download, Eye, FileText, Lock, Search, Trash2 } from 'lucide-react';
 
 type PrivateUploadItem = {
   key: string;
@@ -202,7 +202,7 @@ export default function UploadsPage() {
         <div className="bg-white rounded-[28px] p-6 md:p-8 shadow-sm">
           {/* Upload Area */}
           <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3">
-            <CloudUpload className="w-5 h-5 text-rose-500" />
+            <UploadCloud className="w-5 h-5 text-rose-500" />
             Private Uploads
           </div>
 
@@ -238,7 +238,7 @@ export default function UploadsPage() {
           >
             <div className="px-6 py-12 md:py-14 flex flex-col items-center text-center text-white">
               <div className="w-16 h-16 rounded-full bg-white/15 flex items-center justify-center mb-4">
-                <CloudUpload className="w-7 h-7 text-white" />
+                <UploadCloud className="w-7 h-7 text-white" />
               </div>
               <div className="text-base md:text-lg font-extrabold">Drag &amp; Drop files here</div>
               <div className="text-xs md:text-sm text-white/90 mt-2">Support for PDF and .TXT files</div>

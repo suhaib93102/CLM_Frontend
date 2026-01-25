@@ -4,7 +4,7 @@ import { AuthProvider } from "./lib/auth-context";
 
 export const metadata: Metadata = {
   title: "CLM System - Contract Lifecycle Management",
-  description: "Modern contract lifecycle management dashboard with analytics and tracking",
+  description: "Comprehensive contract lifecycle management system",
 };
 
 export default function RootLayout({
@@ -22,4 +22,3 @@ export default function RootLayout({
     </html>
   );
 }
-
