@@ -11,6 +11,7 @@ import {
   FileText,
   Files,
   LayoutGrid,
+  Lock,
   LogOut,
   Search,
   Settings,
@@ -80,6 +81,12 @@ const SidebarV2: React.FC<SidebarV2Props> = ({ mobileOpen = false, onMobileOpenC
       href: '/search',
       icon: <Search className="w-5 h-5" />,
       activePaths: ['/search'],
+    },
+    {
+      name: 'Uploads',
+      href: '/uploads',
+      icon: <Lock className="w-5 h-5" />,
+      activePaths: ['/uploads'],
     },
     {
       name: 'Analytics',

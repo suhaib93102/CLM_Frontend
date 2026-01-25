@@ -136,6 +136,27 @@ export interface SearchResult {
   relevance_score: number
 }
 
+export interface PrivateUploadItem {
+  key: string
+  filename: string
+  file_type: string
+  size: number
+  uploaded_at?: string | null
+}
+
+export interface PrivateUploadsListResponse {
+  success: boolean
+  count: number
+  results: PrivateUploadItem[]
+}
+
+export interface PrivateUploadUrlResponse {
+  success: boolean
+  key: string
+  url: string
+  expires_in: number
+}
+
 export class ApiClient {
   private baseUrl: string
   private token: string | null = null
@@ -261,6 +282,59 @@ export class ApiClient {
       return {
         success: true,
         data: responseData,
+        status: response.status,
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        status: 0,
+      }
+    }
+  }
+
+  private async multipartRequest<T>(
+    method: 'POST' | 'PUT' | 'PATCH',
+    endpoint: string,
+    formData: FormData,
+    allowRetry: boolean = true
+  ): Promise<ApiResponse<T>> {
+    try {
+      const headers: Record<string, string> = {}
+      if (this.token) {
+        headers['Authorization'] = `Bearer ${this.token}`
+      }
+
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        method,
+        headers,
+        credentials: 'include',
+        body: formData,
+      })
+
+      if (response.status === 401) {
+        if (allowRetry && (await this.refreshAccessToken())) {
+          return this.multipartRequest(method, endpoint, formData, false)
+        }
+        return {
+          success: false,
+          error: 'Unauthorized - Please log in again',
+          status: 401,
+        }
+      }
+
+      const responseData = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        return {
+          success: false,
+          error: (responseData as any)?.message || (responseData as any)?.detail || 'Request failed',
+          status: response.status,
+        }
+      }
+
+      return {
+        success: true,
+        data: responseData as T,
         status: response.status,
       }
     } catch (error) {
@@ -523,6 +597,27 @@ export class ApiClient {
 
   async markNotificationAsRead(id: string): Promise<ApiResponse> {
     return this.request('PUT', `/api/notifications/${id}/`, { read: true })
+  }
+
+  // ==================== PRIVATE UPLOADS (R2-ONLY) ====================
+  async listPrivateUploads(): Promise<ApiResponse<PrivateUploadsListResponse>> {
+    return this.request('GET', `${ApiClient.API_V1_PREFIX}/private-uploads/`)
+  }
+
+  async getPrivateUploadUrl(key: string): Promise<ApiResponse<PrivateUploadUrlResponse>> {
+    const encoded = encodeURIComponent(key)
+    return this.request('GET', `${ApiClient.API_V1_PREFIX}/private-uploads/url/?key=${encoded}`)
+  }
+
+  async deletePrivateUpload(key: string): Promise<ApiResponse<{ success: boolean }>> {
+    const encoded = encodeURIComponent(key)
+    return this.request('DELETE', `${ApiClient.API_V1_PREFIX}/private-uploads/?key=${encoded}`)
+  }
+
+  async uploadPrivateUpload(file: File): Promise<ApiResponse<any>> {
+    const form = new FormData()
+    form.append('file', file)
+    return this.multipartRequest('POST', `${ApiClient.API_V1_PREFIX}/private-uploads/`, form)
   }
 
   // ==================== SEARCH ====================
