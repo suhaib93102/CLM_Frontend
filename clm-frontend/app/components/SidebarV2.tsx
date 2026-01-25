@@ -12,10 +12,7 @@ import {
   FileText,
   Files,
   LayoutGrid,
-  Lock,
   LogOut,
-  Search,
-  Settings,
 } from 'lucide-react';
 
 interface NavItem {
@@ -54,10 +51,16 @@ const SidebarV2: React.FC<SidebarV2Props> = ({ mobileOpen = false, onMobileOpenC
 
   const navItems: NavItem[] = [
     {
-      name: 'Dashboard',
+      name: 'Overview',
       href: '/dashboard',
       icon: <LayoutGrid className="w-5 h-5" />,
       activePaths: ['/dashboard'],
+    },
+    {
+      name: 'Drafting',
+      href: '/create-contract',
+      icon: <FileText className="w-5 h-5" />,
+      activePaths: ['/create-contract'],
     },
     {
       name: 'Templates',
@@ -66,28 +69,10 @@ const SidebarV2: React.FC<SidebarV2Props> = ({ mobileOpen = false, onMobileOpenC
       activePaths: ['/templates'],
     },
     {
-      name: 'Approvals',
-      href: '/approvals',
-      icon: <CheckSquare className="w-5 h-5" />,
-      activePaths: ['/approvals'],
-    },
-    {
-      name: 'Contracts',
+      name: 'Repository',
       href: '/contracts',
-      icon: <FileText className="w-5 h-5" />,
-      activePaths: ['/contracts', '/create-contract'],
-    },
-    {
-      name: 'Search',
-      href: '/search',
-      icon: <Search className="w-5 h-5" />,
-      activePaths: ['/search'],
-    },
-    {
-      name: 'Uploads',
-      href: '/uploads',
-      icon: <Lock className="w-5 h-5" />,
-      activePaths: ['/uploads'],
+      icon: <Files className="w-5 h-5" />,
+      activePaths: ['/contracts', '/contracts/'],
     },
     {
       name: 'Calendar',
@@ -102,9 +87,9 @@ const SidebarV2: React.FC<SidebarV2Props> = ({ mobileOpen = false, onMobileOpenC
       activePaths: ['/analytics'],
     },
     {
-      name: 'Settings',
+      name: 'Parties',
       href: '/settings',
-      icon: <Settings className="w-5 h-5" />,
+      icon: <CheckSquare className="w-5 h-5" />,
       activePaths: ['/settings'],
     },
   ];
@@ -145,11 +130,11 @@ const SidebarV2: React.FC<SidebarV2Props> = ({ mobileOpen = false, onMobileOpenC
         <div className="flex items-center h-20 px-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-[#FF5C7A] rounded-xl flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-lg">S</span>
+              <span className="text-white font-bold text-lg">C</span>
             </div>
             {expanded && (
               <div className="flex flex-col">
-                <span className="text-white font-bold text-base whitespace-nowrap">Searchly</span>
+                <span className="text-white font-bold text-base whitespace-nowrap">ContractFlow</span>
                 <span className="text-white/50 text-xs whitespace-nowrap">Workspace</span>
               </div>
             )}

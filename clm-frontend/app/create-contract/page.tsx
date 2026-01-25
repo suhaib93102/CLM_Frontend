@@ -1,28 +1,99 @@
 'use client';
 
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
-import { ApiClient, FileTemplateItem } from '../lib/api-client';
+import {
+  ApiClient,
+  Clause,
+  FileTemplateItem,
+  TemplateFileSchemaResponse,
+  TemplateSchemaField,
+  TemplateSchemaSection,
+} from '../lib/api-client';
 import DashboardLayout from '../components/DashboardLayout';
+import { Bell, ChevronLeft, ChevronRight, FileText, Sparkles, Settings2, ZoomIn, ZoomOut } from 'lucide-react';
 
 // Types
 type Template = FileTemplateItem;
+
+type Mode = 'templates' | 'ai';
+
+type CustomClause = { title?: string; content: string };
+type Constraint = { name: string; value: string };
+
+const STANDARD_TEMPLATES_ORDER = [
+  'Mutual_NDA.txt',
+  'MSA_Master_Services.txt',
+  'SOW_Statement_of_Work.txt',
+  'Contractor_Agreement.txt',
+];
+
+const TEMPLATE_CARD_META: Record<
+  string,
+  { title: string; subtitle: string; pill: string; eta: string; iconBg: string; icon: React.ReactNode }
+> = {
+  'Mutual_NDA.txt': {
+    title: 'Mutual NDA',
+    subtitle: 'Protect confidential information between two parties.',
+    pill: 'Standard',
+    eta: '~5 mins',
+    iconBg: 'bg-blue-50 text-blue-600',
+    icon: <FileText className="w-5 h-5" />,
+  },
+  'MSA_Master_Services.txt': {
+    title: 'MSA (Master Services)',
+    subtitle: 'Framework agreement for ongoing service relationships.',
+    pill: 'Complex',
+    eta: '~15 mins',
+    iconBg: 'bg-orange-50 text-orange-600',
+    icon: <FileText className="w-5 h-5" />,
+  },
+  'SOW_Statement_of_Work.txt': {
+    title: 'SOW (Statement of Work)',
+    subtitle: 'Define specific project deliverables and timelines.',
+    pill: 'Project',
+    eta: '~10 mins',
+    iconBg: 'bg-emerald-50 text-emerald-600',
+    icon: <FileText className="w-5 h-5" />,
+  },
+  'Contractor_Agreement.txt': {
+    title: 'Contractor Agreement',
+    subtitle: 'Terms for independent contractors and freelancers.',
+    pill: 'HR',
+    eta: '~8 mins',
+    iconBg: 'bg-violet-50 text-violet-600',
+    icon: <FileText className="w-5 h-5" />,
+  },
+};
 
 const CreateContractInner = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const [mode, setMode] = useState<Mode>('templates');
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
-  const [contractTitle, setContractTitle] = useState('');
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [templateContent, setTemplateContent] = useState<string>('');
-  const [templateFields, setTemplateFields] = useState<string[]>([]);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
-  const [templateContentLoading, setTemplateContentLoading] = useState(false);
+  const [schemaLoading, setSchemaLoading] = useState(false);
+  const [schema, setSchema] = useState<TemplateFileSchemaResponse | null>(null);
+
+  const [clausesLoading, setClausesLoading] = useState(false);
+  const [clauses, setClauses] = useState<Clause[]>([]);
+  const [clauseQuery, setClauseQuery] = useState('');
+  const [selectedClauseIds, setSelectedClauseIds] = useState<string[]>([]);
+
+  const [customClauses, setCustomClauses] = useState<CustomClause[]>([]);
+  const [constraints, setConstraints] = useState<Constraint[]>([]);
+
+  const [previewText, setPreviewText] = useState<string>('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState(1);
+
+  const cardsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     fetchTemplates();
@@ -36,70 +107,70 @@ const CreateContractInner = () => {
 
   useEffect(() => {
     if (!selectedTemplate) {
-      setTemplateContent('');
-      setTemplateFields([]);
+      setSchema(null);
       setFieldValues({});
+      setSelectedClauseIds([]);
+      setCustomClauses([]);
+      setConstraints([]);
+      setPreviewText('');
       return;
     }
 
-    const load = async () => {
+    const loadSchemaAndClauses = async () => {
       try {
-        setTemplateContentLoading(true);
+        setSchemaLoading(true);
         const client = new ApiClient();
-        const res = await client.getTemplateFileContent(selectedTemplate);
-        if (!res.success) {
-          setTemplateContent('');
-          setTemplateFields([]);
-          setFieldValues({});
+        const schemaRes = await client.getTemplateFileSchema(selectedTemplate);
+        if (!schemaRes.success) {
+          setSchema(null);
           return;
         }
 
-        const content = (res.data as any)?.content || '';
-        setTemplateContent(content);
+        const s = schemaRes.data as any as TemplateFileSchemaResponse;
+        setSchema(s);
 
-        const rx = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
-        const keys = new Set<string>();
-        let m: RegExpExecArray | null;
-        while ((m = rx.exec(content)) !== null) {
-          const key = (m[1] || '').trim();
-          if (key) keys.add(key);
+        // Ensure fieldValues has keys for required schema fields.
+        const requiredKeys: string[] = [];
+        for (const section of s.sections || []) {
+          for (const field of section.fields || []) {
+            if (field?.key) requiredKeys.push(field.key);
+          }
         }
-
-        const fields = Array.from(keys).sort();
-        setTemplateFields(fields);
         setFieldValues((prev) => {
           const next: Record<string, string> = { ...prev };
-          for (const f of fields) {
-            if (next[f] === undefined) next[f] = '';
+          for (const k of requiredKeys) {
+            if (next[k] === undefined) next[k] = '';
           }
-          // Remove stale keys
-          Object.keys(next).forEach((k) => {
-            if (!keys.has(k)) delete next[k];
-          });
           return next;
         });
+
+        setClausesLoading(true);
+        const clausesRes = await client.getClauses({ contract_type: s.template_type });
+        if (clausesRes.success) {
+          const data: any = clausesRes.data as any;
+          const list = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+          setClauses(list);
+        } else {
+          setClauses([]);
+        }
       } finally {
-        setTemplateContentLoading(false);
+        setSchemaLoading(false);
+        setClausesLoading(false);
       }
     };
 
-    load();
+    loadSchemaAndClauses();
   }, [selectedTemplate]);
 
-  const labelFromKey = (k: string) =>
-    k
-      .replace(/_/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .replace(/\b\w/g, (c) => c.toUpperCase());
-
-  const inputTypeForKey = (k: string) => {
-    const s = k.toLowerCase();
-    if (s.includes('date')) return 'date';
-    if (s.includes('email')) return 'email';
-    if (s.includes('amount') || s.includes('price') || s.includes('value') || s.includes('fee')) return 'number';
-    return 'text';
-  };
+  const filteredClauses = useMemo(() => {
+    const list = Array.isArray(clauses) ? clauses : [];
+    const q = clauseQuery.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((c) => {
+      const hay = `${c.clause_id} ${c.name} ${c.content}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [clauses, clauseQuery]);
 
   const fetchTemplates = async () => {
     try {
@@ -116,7 +187,8 @@ const CreateContractInner = () => {
 
         const templateFromQuery = searchParams.get('template');
         if (!templateFromQuery && templateList.length > 0) {
-          setSelectedTemplate(templateList[0].filename);
+          const firstStandard = templateList.find((t: any) => STANDARD_TEMPLATES_ORDER.includes(t.filename))
+          setSelectedTemplate((firstStandard || templateList[0]).filename);
         }
       }
     } catch (err) {
@@ -127,17 +199,70 @@ const CreateContractInner = () => {
     }
   };
 
+  useEffect(() => {
+    if (!selectedTemplate || mode !== 'templates') return;
+    if (!user) return;
+
+    const timer = window.setTimeout(async () => {
+      try {
+        setPreviewLoading(true);
+        const client = new ApiClient();
+        const res = await client.previewContractFromFile({
+          filename: selectedTemplate,
+          structuredInputs: fieldValues,
+          selectedClauses: selectedClauseIds,
+          customClauses,
+          constraints,
+        });
+        if (res.success) {
+          setPreviewText(((res.data as any)?.rendered_text as string) || '');
+        }
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [selectedTemplate, fieldValues, selectedClauseIds, customClauses, constraints, mode, user]);
+
+  const scrollCards = (dir: 'left' | 'right') => {
+    const el = cardsRef.current;
+    if (!el) return;
+    const delta = dir === 'left' ? -420 : 420;
+    el.scrollBy({ left: delta, behavior: 'smooth' });
+  };
+
+  const setField = (key: string, value: string) => {
+    setFieldValues((p) => ({ ...p, [key]: value }));
+  };
+
+  const toggleClause = (clauseId: string) => {
+    setSelectedClauseIds((prev) =>
+      prev.includes(clauseId) ? prev.filter((c) => c !== clauseId) : [...prev, clauseId]
+    );
+  };
+
+  const addCustomClause = () => setCustomClauses((p) => [...p, { title: '', content: '' }]);
+  const addConstraint = () => setConstraints((p) => [...p, { name: '', value: '' }]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!contractTitle.trim()) {
-      setError('Contract title is required');
-      return;
-    }
-
     if (!selectedTemplate) {
       setError('Please select a template');
       return;
     }
+
+    const templateMetaTitle =
+      (selectedTemplate && (TEMPLATE_CARD_META[selectedTemplate]?.title || selectedTemplateObj?.name)) || 'Contract';
+    const partyHint =
+      fieldValues.party_a_name ||
+      fieldValues.party_b_name ||
+      fieldValues.company_name ||
+      fieldValues.client_name ||
+      fieldValues.disclosing_party_name ||
+      fieldValues.receiving_party_name ||
+      '';
+    const derivedTitle = partyHint ? `${templateMetaTitle} — ${partyHint}` : templateMetaTitle;
 
     setLoading(true);
     setError(null);
@@ -146,8 +271,10 @@ const CreateContractInner = () => {
       const client = new ApiClient();
       const response = await client.generateContractFromFile({
         filename: selectedTemplate,
-        title: contractTitle,
-        selectedClauses: [],
+        title: derivedTitle,
+        selectedClauses: selectedClauseIds,
+        customClauses,
+        constraints,
         structuredInputs: fieldValues,
       });
 
@@ -172,145 +299,455 @@ const CreateContractInner = () => {
 
   const selectedTemplateObj = templates.find((t) => t.filename === selectedTemplate) || null;
 
+  const standardTemplates = useMemo(() => {
+    const map = new Map<string, Template>();
+    for (const t of templates) map.set(t.filename, t);
+    const ordered = STANDARD_TEMPLATES_ORDER.map((f) => map.get(f)).filter(Boolean) as Template[];
+    if (ordered.length) return ordered;
+    return templates.slice(0, 4);
+  }, [templates]);
+
+  const sections: TemplateSchemaSection[] = schema?.sections || [];
+
+  const isCreateDisabled = !user || !selectedTemplateObj || loading || mode !== 'templates';
+
+  const pageTitle = 'Contract Generator';
+  const pageSubtitle = 'Select a template and autofill details to generate contracts instantly.';
+
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-[#F2F0EB] p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
-            <h1 className="text-3xl font-bold text-[#2D3748]">Create New Contract</h1>
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800"
-            >
-              ← Back to Dashboard
-            </button>
-          </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-2xl mb-6">
-            <p className="font-medium">{error}</p>
-          </div>
-        )}
-
-          <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Contract Title */}
-          <div className="bg-white p-6 rounded-[20px] shadow-sm">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Contract Title *
-            </label>
-            <input
-              type="text"
-              value={contractTitle}
-              onChange={(e) => setContractTitle(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="Enter contract title"
-              required
-            />
-          </div>
-
-          {/* Template Selection */}
-            <div className="bg-white p-6 rounded-[20px] shadow-sm">
-              <h3 className="text-lg font-semibold text-[#2D3748] mb-4">Select Template</h3>
-              {templatesLoading ? (
-                <p className="text-gray-500 text-center py-8">Loading templates…</p>
-              ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {templates.map((template) => (
-                <div
-                  key={template.filename}
-                  onClick={() => setSelectedTemplate(template.filename)}
-                  className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                    selectedTemplate === template.filename
-                      ? 'border-indigo-500 bg-indigo-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <h4 className="font-medium text-[#2D3748]">{template.name}</h4>
-                  {template.description && (
-                    <p className="text-sm text-gray-600 mt-1">{template.description}</p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-2">{template.filename}</p>
-                </div>
-              ))}
+      <div className="min-h-screen bg-[#F2F0EB]">
+        <div className="max-w-[1280px] mx-auto px-4 md:px-8 py-6 md:py-8">
+          <div className="flex items-start justify-between gap-6">
+            <div>
+              <h1 className="text-[28px] md:text-[34px] font-semibold text-[#0F141F] leading-tight">{pageTitle}</h1>
+              <p className="text-sm md:text-base text-[#6B7280] mt-1">{pageSubtitle}</p>
             </div>
-              )}
-            {templates.length === 0 && (
-              <p className="text-gray-500 text-center py-8">No templates available</p>
-            )}
-            </div>
-
-          {/* Template Fields */}
-          <div className="bg-white p-6 rounded-[20px] shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-semibold text-[#2D3748]">Fill Template Values</h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  Fields are detected from <span className="font-mono font-semibold">{'{{placeholders}}'}</span> inside the selected template.
-                </p>
-              </div>
-              {!selectedTemplate && (
-                <div className="text-sm text-gray-500">Select a template first</div>
-              )}
-            </div>
-
-            {templateContentLoading ? (
-              <div className="text-gray-500 text-center py-8">Loading template…</div>
-            ) : !selectedTemplate ? (
-              <div className="text-gray-500 text-center py-8">No template selected</div>
-            ) : templateFields.length === 0 ? (
-              <div className="text-gray-500 text-center py-8">
-                No placeholders found. You can still create the contract.
-              </div>
-            ) : (
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {templateFields.map((k) => (
-                  <div key={k}>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">{labelFromKey(k)}</label>
-                    <input
-                      type={inputTypeForKey(k)}
-                      value={fieldValues[k] || ''}
-                      onChange={(e) => setFieldValues((p) => ({ ...p, [k]: e.target.value }))}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder={`Enter ${labelFromKey(k)}`}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Submit Button */}
-            <div className="flex justify-end">
+            <div className="flex items-center gap-3">
               <button
-                type="submit"
-                disabled={loading || !selectedTemplateObj || !user}
-                className="bg-[#0F141F] text-white px-8 py-4 rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                type="button"
+                className="w-10 h-10 rounded-full bg-white shadow-sm border border-black/5 flex items-center justify-center text-[#0F141F]/70 hover:text-[#0F141F]"
+                aria-label="Notifications"
               >
-              {loading ? (
-                <>
-                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                  </svg>
-                  Creating Contract...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Create Contract
-                </>
-              )}
+                <Bell className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                className="w-10 h-10 rounded-full bg-white shadow-sm border border-black/5 flex items-center justify-center text-[#0F141F]/70 hover:text-[#0F141F]"
+                aria-label="Settings"
+              >
+                <Settings2 className="w-5 h-5" />
               </button>
             </div>
+          </div>
 
-            {!user && (
-              <div className="text-sm text-gray-500 text-right">
-                Please log in to create contracts.
+          <div className="mt-6 flex items-center justify-between gap-4">
+            <div className="inline-flex items-center rounded-full bg-white border border-black/5 p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setMode('templates')}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                  mode === 'templates' ? 'bg-[#0F141F] text-white' : 'text-[#0F141F]/70 hover:text-[#0F141F]'
+                }`}
+              >
+                Template Based
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('ai')}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center gap-2 ${
+                  mode === 'ai' ? 'bg-[#0F141F] text-white' : 'text-[#0F141F]/70 hover:text-[#0F141F]'
+                }`}
+              >
+                <Sparkles className="w-4 h-4" /> AI Builder
+              </button>
+            </div>
+          </div>
+
+          {mode === 'ai' ? (
+            <div className="mt-8 bg-white rounded-[18px] border border-black/5 shadow-sm p-8">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#0F141F] text-white flex items-center justify-center">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-lg font-semibold text-[#0F141F]">AI Builder</div>
+                  <div className="text-sm text-[#6B7280]">Coming soon. Template-based drafting is available now.</div>
+                </div>
               </div>
-            )}
-          </form>
+            </div>
+          ) : (
+            <>
+              <div className="mt-8">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-[#0F141F]">Standard Templates</h2>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => scrollCards('left')}
+                      className="w-9 h-9 rounded-lg bg-white border border-black/5 shadow-sm flex items-center justify-center text-[#0F141F]/60 hover:text-[#0F141F]"
+                      aria-label="Scroll left"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => scrollCards('right')}
+                      className="w-9 h-9 rounded-lg bg-white border border-black/5 shadow-sm flex items-center justify-center text-[#0F141F]/60 hover:text-[#0F141F]"
+                      aria-label="Scroll right"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  ref={cardsRef}
+                  className="mt-4 flex gap-4 overflow-x-auto pb-2 scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none]"
+                >
+                  <style jsx>{`
+                    div::-webkit-scrollbar { display: none; }
+                  `}</style>
+                  {templatesLoading ? (
+                    <div className="text-sm text-[#6B7280] py-6">Loading templates…</div>
+                  ) : standardTemplates.length === 0 ? (
+                    <div className="text-sm text-[#6B7280] py-6">No templates available</div>
+                  ) : (
+                    standardTemplates.map((t) => {
+                      const isSelected = selectedTemplate === t.filename;
+                      const meta = TEMPLATE_CARD_META[t.filename] || {
+                        title: t.name,
+                        subtitle: t.description || 'Template',
+                        pill: 'Standard',
+                        eta: '~5 mins',
+                        iconBg: 'bg-slate-50 text-slate-700',
+                        icon: <FileText className="w-5 h-5" />,
+                      };
+                      return (
+                        <button
+                          key={t.filename}
+                          type="button"
+                          onClick={() => setSelectedTemplate(t.filename)}
+                          className={`min-w-[280px] md:min-w-[320px] text-left bg-white rounded-[18px] border shadow-sm p-5 transition ${
+                            isSelected
+                              ? 'border-[#FF5C7A] ring-2 ring-[#FF5C7A]/20'
+                              : 'border-black/5 hover:border-black/10'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className={`w-10 h-10 rounded-xl ${meta.iconBg} flex items-center justify-center`}>{meta.icon}</div>
+                            <div
+                              className={`w-6 h-6 rounded-full flex items-center justify-center border ${
+                                isSelected ? 'bg-[#FF5C7A] border-[#FF5C7A]' : 'bg-white border-black/10'
+                              }`}
+                            >
+                              {isSelected ? <div className="w-2.5 h-2.5 rounded-full bg-white" /> : null}
+                            </div>
+                          </div>
+
+                          <div className="mt-4">
+                            <div className="font-semibold text-[#0F141F]">{meta.title}</div>
+                            <div className="text-sm text-[#6B7280] mt-1">{meta.subtitle}</div>
+                          </div>
+
+                          <div className="mt-4 flex items-center gap-2">
+                            <span className="text-xs px-2.5 py-1 rounded-full bg-[#F3F4F6] text-[#0F141F]/70">
+                              {meta.pill}
+                            </span>
+                            <span className="text-xs text-[#6B7280]">{meta.eta}</span>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {error && (
+                <div className="mt-6 bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-2xl">
+                  <p className="font-medium">{error}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left: Data Entry */}
+                <div className="bg-white rounded-[18px] border border-black/5 shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-black/5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-[#FF5C7A] text-white flex items-center justify-center text-xs font-bold">1</div>
+                      <div className="font-semibold text-[#0F141F]">Data Entry</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFieldValues({});
+                        setSelectedClauseIds([]);
+                        setCustomClauses([]);
+                        setConstraints([]);
+                      }}
+                      className="text-xs text-[#FF5C7A] hover:underline"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+
+                  <div className="p-5 space-y-6">
+                    {!selectedTemplate ? (
+                      <div className="text-sm text-[#6B7280]">Select a template to begin.</div>
+                    ) : schemaLoading ? (
+                      <div className="text-sm text-[#6B7280]">Loading required fields…</div>
+                    ) : (
+                      <>
+                        {(sections.length ? sections : [{ title: 'Data Entry', fields: [] }]).map((section) => (
+                          <div key={section.title}>
+                            <div className="text-[11px] tracking-wider text-[#9CA3AF] font-semibold uppercase">{section.title}</div>
+                            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {(section.fields || []).map((f: TemplateSchemaField) => (
+                                <div key={f.key} className={f.type === 'select' ? 'md:col-span-1' : ''}>
+                                  <label className="block text-sm font-medium text-[#374151] mb-2">
+                                    {f.label} {f.required ? <span className="text-[#FF5C7A]">*</span> : null}
+                                  </label>
+                                  {f.type === 'select' ? (
+                                    <select
+                                      value={fieldValues[f.key] || ''}
+                                      onChange={(e) => setField(f.key, e.target.value)}
+                                      className="w-full px-4 py-3 border border-black/10 rounded-xl bg-white focus:ring-2 focus:ring-[#FF5C7A]/30 focus:border-[#FF5C7A]/40"
+                                    >
+                                      <option value="">Select…</option>
+                                      {(f.options || []).map((o) => (
+                                        <option key={o} value={o}>
+                                          {o}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      type={f.type}
+                                      value={fieldValues[f.key] || ''}
+                                      onChange={(e) => setField(f.key, e.target.value)}
+                                      className="w-full px-4 py-3 border border-black/10 rounded-xl bg-white focus:ring-2 focus:ring-[#FF5C7A]/30 focus:border-[#FF5C7A]/40"
+                                      placeholder={f.label}
+                                    />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Clauses & Constraints */}
+                        <div>
+                          <div className="text-[11px] tracking-wider text-[#9CA3AF] font-semibold uppercase">Clause & Constraints</div>
+                          <div className="mt-3 space-y-4">
+                            <div className="bg-[#F7F7F7] rounded-2xl p-4 border border-black/5">
+                              <div className="flex items-center justify-between">
+                                <div className="font-semibold text-[#111827] text-sm">Clause Library</div>
+                                <div className="text-xs text-[#6B7280]">Optional</div>
+                              </div>
+                              <div className="mt-3">
+                                <input
+                                  value={clauseQuery}
+                                  onChange={(e) => setClauseQuery(e.target.value)}
+                                  placeholder="Search clauses…"
+                                  className="w-full px-4 py-2.5 border border-black/10 rounded-xl bg-white focus:ring-2 focus:ring-[#FF5C7A]/30 focus:border-[#FF5C7A]/40"
+                                />
+                              </div>
+                              <div className="mt-3 max-h-44 overflow-y-auto space-y-2 pr-1">
+                                {clausesLoading ? (
+                                  <div className="text-sm text-[#6B7280]">Loading clauses…</div>
+                                ) : filteredClauses.length === 0 ? (
+                                  <div className="text-sm text-[#6B7280]">No clauses found.</div>
+                                ) : (
+                                  filteredClauses.slice(0, 50).map((c) => {
+                                    const checked = selectedClauseIds.includes(c.clause_id);
+                                    return (
+                                      <label
+                                        key={`${c.clause_id}-${c.version}`}
+                                        className="flex items-start gap-3 bg-white rounded-xl border border-black/5 p-3 cursor-pointer hover:border-black/10"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() => toggleClause(c.clause_id)}
+                                          className="mt-1"
+                                        />
+                                        <div className="min-w-0">
+                                          <div className="text-sm font-semibold text-[#111827] truncate">{c.name}</div>
+                                          <div className="text-xs text-[#6B7280]">{c.clause_id}</div>
+                                        </div>
+                                      </label>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="bg-[#F7F7F7] rounded-2xl p-4 border border-black/5">
+                              <div className="flex items-center justify-between">
+                                <div className="font-semibold text-[#111827] text-sm">Constraints</div>
+                                <button
+                                  type="button"
+                                  onClick={addConstraint}
+                                  className="text-xs px-3 py-1.5 rounded-full bg-white border border-black/10 hover:border-black/20"
+                                >
+                                  Add
+                                </button>
+                              </div>
+                              <div className="mt-3 space-y-3">
+                                {constraints.length === 0 ? (
+                                  <div className="text-sm text-[#6B7280]">Add constraints like jurisdiction, data residency, liability caps, etc.</div>
+                                ) : (
+                                  constraints.map((c, idx) => (
+                                    <div key={idx} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                      <input
+                                        value={c.name}
+                                        onChange={(e) =>
+                                          setConstraints((p) => p.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))
+                                        }
+                                        placeholder="Constraint name"
+                                        className="w-full px-4 py-2.5 border border-black/10 rounded-xl bg-white focus:ring-2 focus:ring-[#FF5C7A]/30 focus:border-[#FF5C7A]/40"
+                                      />
+                                      <div className="flex gap-2">
+                                        <input
+                                          value={c.value}
+                                          onChange={(e) =>
+                                            setConstraints((p) => p.map((x, i) => (i === idx ? { ...x, value: e.target.value } : x)))
+                                          }
+                                          placeholder="Value"
+                                          className="flex-1 px-4 py-2.5 border border-black/10 rounded-xl bg-white focus:ring-2 focus:ring-[#FF5C7A]/30 focus:border-[#FF5C7A]/40"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => setConstraints((p) => p.filter((_, i) => i !== idx))}
+                                          className="px-3 py-2.5 rounded-xl bg-white border border-black/10 hover:border-black/20 text-[#6B7280]"
+                                          aria-label="Remove constraint"
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="bg-[#F7F7F7] rounded-2xl p-4 border border-black/5">
+                              <div className="flex items-center justify-between">
+                                <div className="font-semibold text-[#111827] text-sm">Custom Clauses</div>
+                                <button
+                                  type="button"
+                                  onClick={addCustomClause}
+                                  className="text-xs px-3 py-1.5 rounded-full bg-white border border-black/10 hover:border-black/20"
+                                >
+                                  Add
+                                </button>
+                              </div>
+                              <div className="mt-3 space-y-3">
+                                {customClauses.length === 0 ? (
+                                  <div className="text-sm text-[#6B7280]">Add custom clauses like non-solicit, security, SLA, etc.</div>
+                                ) : (
+                                  customClauses.map((c, idx) => (
+                                    <div key={idx} className="bg-white rounded-2xl border border-black/5 p-3">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <input
+                                          value={c.title || ''}
+                                          onChange={(e) =>
+                                            setCustomClauses((p) => p.map((x, i) => (i === idx ? { ...x, title: e.target.value } : x)))
+                                          }
+                                          placeholder="Clause title"
+                                          className="flex-1 px-4 py-2.5 border border-black/10 rounded-xl bg-white focus:ring-2 focus:ring-[#FF5C7A]/30 focus:border-[#FF5C7A]/40"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => setCustomClauses((p) => p.filter((_, i) => i !== idx))}
+                                          className="px-3 py-2.5 rounded-xl bg-white border border-black/10 hover:border-black/20 text-[#6B7280]"
+                                          aria-label="Remove custom clause"
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                      <textarea
+                                        value={c.content}
+                                        onChange={(e) =>
+                                          setCustomClauses((p) => p.map((x, i) => (i === idx ? { ...x, content: e.target.value } : x)))
+                                        }
+                                        placeholder="Write clause content…"
+                                        className="mt-3 w-full px-4 py-3 border border-black/10 rounded-xl bg-white focus:ring-2 focus:ring-[#FF5C7A]/30 focus:border-[#FF5C7A]/40 min-h-[96px]"
+                                      />
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right: Live Preview */}
+                <div className="bg-white rounded-[18px] border border-black/5 shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-black/5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-[#6B7280] font-semibold">Live Preview</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewZoom((z) => Math.max(0.8, Math.round((z - 0.1) * 10) / 10))}
+                        className="w-9 h-9 rounded-lg bg-[#F7F7F7] border border-black/5 flex items-center justify-center text-[#0F141F]/70 hover:text-[#0F141F]"
+                        aria-label="Zoom out"
+                      >
+                        <ZoomOut className="w-5 h-5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewZoom((z) => Math.min(1.3, Math.round((z + 0.1) * 10) / 10))}
+                        className="w-9 h-9 rounded-lg bg-[#F7F7F7] border border-black/5 flex items-center justify-center text-[#0F141F]/70 hover:text-[#0F141F]"
+                        aria-label="Zoom in"
+                      >
+                        <ZoomIn className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-5">
+                    <div className="bg-[#EEF0F3] rounded-[18px] p-4">
+                      <div className="bg-white rounded-[14px] shadow-sm border border-black/5 overflow-hidden">
+                        <div className="p-6 max-h-[560px] overflow-y-auto" style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top left' }}>
+                          {previewLoading ? (
+                            <div className="text-sm text-[#6B7280]">Generating preview…</div>
+                          ) : !selectedTemplate ? (
+                            <div className="text-sm text-[#6B7280]">Select a template to preview.</div>
+                          ) : previewText ? (
+                            <pre className="whitespace-pre-wrap text-[13px] leading-relaxed text-[#111827] font-serif">
+                              {previewText}
+                            </pre>
+                          ) : (
+                            <div className="text-sm text-[#6B7280]">Start filling fields to see a preview.</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 flex items-center justify-between gap-4">
+                      <div className="text-sm text-[#6B7280]">
+                        {!user ? 'Please log in to create contracts.' : schema?.template_type ? `Type: ${schema.template_type}` : null}
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={isCreateDisabled}
+                        className="bg-[#0F141F] text-white px-7 py-3.5 rounded-full shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {loading ? 'Creating…' : 'Create Contract'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            </>
+          )}
         </div>
       </div>
     </DashboardLayout>

@@ -90,6 +90,42 @@ export interface FileTemplateContentResponse {
   size: number
 }
 
+export interface TemplateSchemaField {
+  key: string
+  label: string
+  type: 'text' | 'number' | 'date' | 'select'
+  required: boolean
+  options?: string[]
+  in_template?: boolean
+}
+
+export interface TemplateSchemaSection {
+  title: string
+  fields: TemplateSchemaField[]
+}
+
+export interface TemplateFileSchemaResponse {
+  success: boolean
+  filename: string
+  name: string
+  template_type: string
+  placeholders: string[]
+  sections: TemplateSchemaSection[]
+  clauses_ui: {
+    allow_library_selection: boolean
+    allow_custom_clauses: boolean
+    allow_constraints: boolean
+  }
+}
+
+export interface ContractPreviewFromFileResponse {
+  success: boolean
+  filename: string
+  contract_type: string
+  raw_text: string
+  rendered_text: string
+}
+
 export interface Workflow {
   id: string
   name: string
@@ -426,6 +462,8 @@ export class ApiClient {
     userInstructions?: string
     title?: string
     selectedClauses?: string[]
+    customClauses?: Array<{ title?: string; content: string }>
+    constraints?: Array<{ name: string; value: string }>
   }): Promise<ApiResponse<ContractGenerateFromFileResponse>> {
     return this.request('POST', `${ApiClient.API_V1_PREFIX}/contracts/generate-from-file/`, {
       filename: params.filename,
@@ -433,6 +471,8 @@ export class ApiClient {
       user_instructions: params.userInstructions,
       title: params.title,
       selected_clauses: params.selectedClauses || [],
+      custom_clauses: params.customClauses || [],
+      constraints: params.constraints || [],
     })
   }
 
@@ -537,6 +577,29 @@ export class ApiClient {
     const safe = encodeURIComponent(filename)
     return this.request('GET', `${ApiClient.API_V1_PREFIX}/templates/files/content/${safe}/`, undefined, undefined, true, {
       auth: false,
+    })
+  }
+
+  async getTemplateFileSchema(filename: string): Promise<ApiResponse<TemplateFileSchemaResponse>> {
+    const safe = encodeURIComponent(filename)
+    return this.request('GET', `${ApiClient.API_V1_PREFIX}/templates/files/schema/${safe}/`, undefined, undefined, true, {
+      auth: false,
+    })
+  }
+
+  async previewContractFromFile(params: {
+    filename: string
+    structuredInputs?: Record<string, any>
+    selectedClauses?: string[]
+    customClauses?: Array<{ title?: string; content: string }>
+    constraints?: Array<{ name: string; value: string }>
+  }): Promise<ApiResponse<ContractPreviewFromFileResponse>> {
+    return this.request('POST', `${ApiClient.API_V1_PREFIX}/contracts/preview-from-file/`, {
+      filename: params.filename,
+      structured_inputs: params.structuredInputs || {},
+      selected_clauses: params.selectedClauses || [],
+      custom_clauses: params.customClauses || [],
+      constraints: params.constraints || [],
     })
   }
 
