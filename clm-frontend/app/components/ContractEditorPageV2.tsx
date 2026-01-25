@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import DashboardLayout from './DashboardLayout';
 import { ApiClient, Contract } from '@/app/lib/api-client';
@@ -22,6 +22,39 @@ const ContractEditorPageV2: React.FC = () => {
   const [contract, setContract] = useState<Contract | null>(null);
   const [clauses, setClauses] = useState<ClauseCard[]>([]);
   const [clauseSearch, setClauseSearch] = useState('');
+
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const [editorReady, setEditorReady] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [editTick, setEditTick] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const escapeHtml = (s: string) =>
+    (s || '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+
+  const textToHtml = (text: string) => {
+    const safe = escapeHtml(text || '');
+    // Use <br/> to preserve newlines in contentEditable.
+    return safe.replace(/\n/g, '<br/>');
+  };
+
+  const triggerDownload = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     let alive = true;
@@ -54,6 +87,22 @@ const ContractEditorPageV2: React.FC = () => {
     };
   }, [contractId]);
 
+  // Initialize editor HTML from contract once it loads.
+  useEffect(() => {
+    const c = contract as any;
+    const renderedHtml: string | undefined = c?.rendered_html || c?.metadata?.rendered_html;
+    const renderedText: string = c?.rendered_text || c?.metadata?.rendered_text || '';
+    const initialHtml = renderedHtml && String(renderedHtml).trim().length > 0 ? String(renderedHtml) : textToHtml(renderedText);
+
+    if (editorRef.current) {
+      editorRef.current.innerHTML = initialHtml || '';
+      setEditorReady(true);
+      setDirty(false);
+      setSaveError(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contractId, (contract as any)?.id]);
+
   useEffect(() => {
     let alive = true;
     async function loadClauses() {
@@ -82,10 +131,73 @@ const ContractEditorPageV2: React.FC = () => {
 
   const title = (contract as any)?.title || (contract as any)?.name || 'Contract';
   const updatedAt = (contract as any)?.updated_at ? new Date((contract as any).updated_at).toLocaleString() : null;
-  const renderedText =
-    (contract as any)?.rendered_text ||
-    (contract as any)?.metadata?.rendered_text ||
-    '';
+
+  const exec = (command: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    document.execCommand(command, false);
+    setDirty(true);
+    setEditTick((t) => t + 1);
+  };
+
+  const saveNow = async () => {
+    if (!contractId || !editorRef.current) return;
+    const html = editorRef.current.innerHTML;
+    const text = editorRef.current.innerText;
+
+    try {
+      setSaving(true);
+      setSaveError(null);
+      const client = new ApiClient();
+      const res = await client.updateContractContent(contractId, {
+        rendered_html: html,
+        rendered_text: text,
+      });
+      if (res.success) {
+        setContract(res.data as any);
+        setDirty(false);
+      } else {
+        setSaveError(res.error || 'Failed to save');
+      }
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Auto-save with a small debounce.
+  useEffect(() => {
+    if (!editorReady) return;
+    if (!dirty) return;
+    const t = window.setTimeout(() => {
+      saveNow();
+    }, 900);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editTick, dirty, editorReady, contractId]);
+
+  const downloadPdf = async () => {
+    if (!contractId) return;
+    const client = new ApiClient();
+    const res = await client.downloadContractPdf(contractId);
+    if (res.success && res.data) {
+      triggerDownload(res.data, `${title.replace(/\s+/g, '_')}.pdf`);
+    } else {
+      setError(res.error || 'Failed to download PDF');
+    }
+  };
+
+  const downloadTxt = async () => {
+    if (!contractId) return;
+    const client = new ApiClient();
+    const res = await client.downloadContractTxt(contractId);
+    if (res.success && res.data) {
+      triggerDownload(res.data, `${title.replace(/\s+/g, '_')}.txt`);
+    } else {
+      setError(res.error || 'Failed to download TXT');
+    }
+  };
 
   const filteredClauses = useMemo(() => {
     const q = clauseSearch.trim().toLowerCase();
@@ -118,11 +230,14 @@ const ContractEditorPageV2: React.FC = () => {
                 {updatedAt && (
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-xs text-black/45 font-medium">Updated {updatedAt}</span>
+                    <span className="text-xs text-black/45 font-medium">
+                      {saving ? 'Saving…' : dirty ? 'Unsaved changes' : `Updated ${updatedAt}`}
+                    </span>
                   </div>
                 )}
               </div>
               <p className="text-xs text-black/40 mt-1 truncate">Contract ID: {String(contractId || '')}</p>
+              {saveError && <p className="text-xs text-rose-600 mt-1">{saveError}</p>}
             </div>
           </div>
         </div>
@@ -171,32 +286,99 @@ const ContractEditorPageV2: React.FC = () => {
             <div className="px-6 pt-5 pb-4 border-b border-black/5 flex items-center justify-between">
               <div className="flex items-center gap-2 text-black/45">
                 {['B', 'I', 'U'].map((x) => (
-                  <button key={x} className="w-9 h-9 rounded-xl hover:bg-black/5 text-sm font-semibold">
+                  <button
+                    key={x}
+                    onClick={() => exec(x === 'B' ? 'bold' : x === 'I' ? 'italic' : 'underline')}
+                    className="w-9 h-9 rounded-xl hover:bg-black/5 text-sm font-semibold"
+                    aria-label={x}
+                    type="button"
+                  >
                     {x}
                   </button>
                 ))}
-                <button className="w-9 h-9 rounded-xl hover:bg-black/5" aria-label="Bullets">
+                <button
+                  onClick={() => exec('insertUnorderedList')}
+                  className="w-9 h-9 rounded-xl hover:bg-black/5"
+                  aria-label="Bullets"
+                  type="button"
+                >
                   <svg className="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
                   </svg>
                 </button>
               </div>
-              <button className="w-10 h-10 rounded-full hover:bg-black/5 text-black/45" aria-label="More">
-                <svg className="w-6 h-6 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2 relative">
+                <button
+                  onClick={downloadPdf}
+                  className="h-10 px-4 rounded-full bg-[#0F141F] text-white text-sm font-semibold"
+                  type="button"
+                >
+                  Download
+                </button>
+                <button
+                  onClick={() => setMoreOpen((v) => !v)}
+                  className="w-10 h-10 rounded-full hover:bg-black/5 text-black/45"
+                  aria-label="More"
+                  type="button"
+                >
+                  <svg className="w-6 h-6 mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                  </svg>
+                </button>
+
+                {moreOpen && (
+                  <div className="absolute right-0 top-12 w-48 bg-white rounded-2xl border border-black/10 shadow-lg overflow-hidden z-20">
+                    <button
+                      onClick={() => {
+                        setMoreOpen(false);
+                        downloadPdf();
+                      }}
+                      className="w-full text-left px-4 py-3 text-sm hover:bg-black/5"
+                      type="button"
+                    >
+                      Download PDF
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMoreOpen(false);
+                        downloadTxt();
+                      }}
+                      className="w-full text-left px-4 py-3 text-sm hover:bg-black/5"
+                      type="button"
+                    >
+                      Download TXT
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMoreOpen(false);
+                        saveNow();
+                      }}
+                      className="w-full text-left px-4 py-3 text-sm hover:bg-black/5"
+                      type="button"
+                    >
+                      Save now
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="px-10 py-10 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 260px)' }}>
               {loading ? (
                 <div className="text-sm text-black/45">Loading contract…</div>
-              ) : renderedText ? (
-                <pre className="whitespace-pre-wrap text-[13px] leading-6 text-slate-900 font-serif">
-                  {renderedText}
-                </pre>
+              ) : !contract ? (
+                <div className="text-sm text-black/45">No contract found.</div>
               ) : (
-                <div className="text-sm text-black/45">No rendered content available for this contract.</div>
+                <div
+                  ref={editorRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  onInput={() => {
+                    setDirty(true);
+                    setEditTick((t) => t + 1);
+                  }}
+                  className="min-h-[60vh] whitespace-pre-wrap text-[13px] leading-6 text-slate-900 font-serif outline-none"
+                />
               )}
             </div>
           </section>

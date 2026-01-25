@@ -20,6 +20,11 @@ export interface Contract {
   updated_at: string
   value?: number
   created_by?: string
+
+  // Detail fields (present on GET /contracts/{id}/)
+  metadata?: any
+  rendered_text?: string
+  rendered_html?: string
 }
 
 export interface ContractTemplate {
@@ -248,6 +253,9 @@ export class ApiClient {
   }
 
   private async refreshAccessToken(): Promise<boolean> {
+    // Tokens may have been set by a different module (e.g. authAPI in api.ts)
+    // so always reload before attempting refresh.
+    this.loadTokens()
     if (!this.refreshToken) return false
 
     try {
@@ -285,6 +293,9 @@ export class ApiClient {
     options?: { auth?: boolean }
   ): Promise<ApiResponse<T>> {
     try {
+      // Support the exported singleton `apiClient` and any long-lived instances.
+      this.loadTokens()
+
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...customHeaders,
@@ -351,6 +362,7 @@ export class ApiClient {
     allowRetry: boolean = true
   ): Promise<ApiResponse<T>> {
     try {
+      this.loadTokens()
       const headers: Record<string, string> = {}
       if (this.token) {
         headers['Authorization'] = `Bearer ${this.token}`
@@ -388,6 +400,49 @@ export class ApiClient {
         data: responseData as T,
         status: response.status,
       }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        status: 0,
+      }
+    }
+  }
+
+  private async blobRequest(
+    endpoint: string,
+    allowRetry: boolean = true,
+    options?: { auth?: boolean }
+  ): Promise<ApiResponse<Blob>> {
+    try {
+      this.loadTokens()
+
+      const headers: Record<string, string> = {}
+      const useAuth = options?.auth !== false
+
+      if (useAuth && this.token) {
+        headers['Authorization'] = `Bearer ${this.token}`
+      }
+
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      })
+
+      if (response.status === 401) {
+        if (useAuth && allowRetry && (await this.refreshAccessToken())) {
+          return this.blobRequest(endpoint, false, options)
+        }
+        return { success: false, error: 'Unauthorized - Please log in again', status: 401 }
+      }
+
+      if (!response.ok) {
+        return { success: false, error: 'Request failed', status: response.status }
+      }
+
+      const blob = await response.blob()
+      return { success: true, data: blob, status: response.status }
     } catch (error) {
       return {
         success: false,
@@ -487,6 +542,21 @@ export class ApiClient {
 
   async updateContract(id: string, data: Partial<Contract>): Promise<ApiResponse<Contract>> {
     return this.request('PUT', `${ApiClient.API_V1_PREFIX}/contracts/${id}/`, data)
+  }
+
+  async updateContractContent(
+    id: string,
+    data: { rendered_text?: string; rendered_html?: string }
+  ): Promise<ApiResponse<any>> {
+    return this.request('PATCH', `${ApiClient.API_V1_PREFIX}/contracts/${id}/content/`, data)
+  }
+
+  async downloadContractTxt(id: string): Promise<ApiResponse<Blob>> {
+    return this.blobRequest(`${ApiClient.API_V1_PREFIX}/contracts/${id}/download-txt/`)
+  }
+
+  async downloadContractPdf(id: string): Promise<ApiResponse<Blob>> {
+    return this.blobRequest(`${ApiClient.API_V1_PREFIX}/contracts/${id}/download-pdf/`)
   }
 
   async deleteContract(id: string): Promise<ApiResponse> {

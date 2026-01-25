@@ -13,6 +13,7 @@ import {
   Files,
   LayoutGrid,
   LogOut,
+  Upload,
 } from 'lucide-react';
 
 interface NavItem {
@@ -73,6 +74,12 @@ const SidebarV2: React.FC<SidebarV2Props> = ({ mobileOpen = false, onMobileOpenC
       href: '/contracts',
       icon: <Files className="w-5 h-5" />,
       activePaths: ['/contracts', '/contracts/'],
+    },
+    {
+      name: 'Uploads',
+      href: '/uploads',
+      icon: <Upload className="w-5 h-5" />,
+      activePaths: ['/uploads'],
     },
     {
       name: 'Calendar',
