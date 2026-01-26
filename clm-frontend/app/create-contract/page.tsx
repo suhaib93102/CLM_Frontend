@@ -12,7 +12,7 @@ import {
   TemplateSchemaSection,
 } from '../lib/api-client';
 import DashboardLayout from '../components/DashboardLayout';
-import { Bell, ChevronLeft, ChevronRight, FileText, Sparkles, Settings2, ZoomIn, ZoomOut } from 'lucide-react';
+import { Bell, ChevronLeft, ChevronRight, FileText, Search, Sparkles, Settings2, ZoomIn, ZoomOut } from 'lucide-react';
 
 // Types
 type Template = FileTemplateItem;
@@ -73,6 +73,7 @@ const CreateContractInner = () => {
   const { user } = useAuth();
   const [mode, setMode] = useState<Mode>('templates');
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [templateQuery, setTemplateQuery] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -307,6 +308,28 @@ const CreateContractInner = () => {
     return templates.slice(0, 4);
   }, [templates]);
 
+  const allTemplatesOrdered = useMemo(() => {
+    const standardSet = new Set(STANDARD_TEMPLATES_ORDER);
+    const pinned: Template[] = [];
+    const byFilename = new Map<string, Template>();
+    for (const t of templates) byFilename.set(t.filename, t);
+    for (const f of STANDARD_TEMPLATES_ORDER) {
+      const t = byFilename.get(f);
+      if (t) pinned.push(t);
+    }
+    const rest = templates.filter((t) => !standardSet.has(t.filename));
+    return [...pinned, ...rest];
+  }, [templates]);
+
+  const filteredTemplates = useMemo(() => {
+    const q = templateQuery.trim().toLowerCase();
+    if (!q) return allTemplatesOrdered;
+    return allTemplatesOrdered.filter((t) => {
+      const hay = `${t.filename || ''} ${t.name || ''} ${t.description || ''} ${t.contract_type || ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [allTemplatesOrdered, templateQuery]);
+
   const sections: TemplateSchemaSection[] = schema?.sections || [];
 
   const isCreateDisabled = !user || !selectedTemplateObj || loading || mode !== 'templates';
@@ -459,6 +482,89 @@ const CreateContractInner = () => {
                         </button>
                       );
                     })
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <h2 className="text-sm font-semibold text-[#0F141F]">All Templates</h2>
+                  <div className="flex items-center gap-2 bg-white border border-black/5 shadow-sm rounded-full px-4 py-2 w-full sm:w-[420px]">
+                    <Search className="w-4 h-4 text-black/35" />
+                    <input
+                      value={templateQuery}
+                      onChange={(e) => setTemplateQuery(e.target.value)}
+                      placeholder="Search templates…"
+                      className="bg-transparent outline-none text-sm w-full text-[#0F141F] placeholder:text-black/35"
+                      aria-label="Search templates"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  {templatesLoading ? (
+                    <div className="text-sm text-[#6B7280] py-6">Loading templates…</div>
+                  ) : filteredTemplates.length === 0 ? (
+                    <div className="text-sm text-[#6B7280] py-6">No templates match your search.</div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filteredTemplates.map((t) => {
+                        const isSelected = selectedTemplate === t.filename;
+                        const meta = TEMPLATE_CARD_META[t.filename] || {
+                          title: t.name,
+                          subtitle: t.description || 'Template',
+                          pill: t.contract_type || 'Template',
+                          eta: '~5 mins',
+                          iconBg: 'bg-slate-50 text-slate-700',
+                          icon: <FileText className="w-5 h-5" />,
+                        };
+
+                        const createdByYou =
+                          user &&
+                          ((t as any)?.created_by_id && String((t as any).created_by_id) === String((user as any)?.user_id));
+
+                        return (
+                          <button
+                            key={t.filename}
+                            type="button"
+                            onClick={() => setSelectedTemplate(t.filename)}
+                            className={`text-left bg-white rounded-[18px] border shadow-sm p-5 transition w-full ${
+                              isSelected
+                                ? 'border-[#FF5C7A] ring-2 ring-[#FF5C7A]/20'
+                                : 'border-black/5 hover:border-black/10'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className={`w-10 h-10 rounded-xl ${meta.iconBg} flex items-center justify-center flex-shrink-0`}>{meta.icon}</div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="font-semibold text-[#0F141F] truncate">{meta.title}</div>
+                                  <div
+                                    className={`w-6 h-6 rounded-full flex items-center justify-center border flex-shrink-0 ${
+                                      isSelected ? 'bg-[#FF5C7A] border-[#FF5C7A]' : 'bg-white border-black/10'
+                                    }`}
+                                  >
+                                    {isSelected ? <div className="w-2.5 h-2.5 rounded-full bg-white" /> : null}
+                                  </div>
+                                </div>
+                                <div className="text-sm text-[#6B7280] mt-1 line-clamp-2">{meta.subtitle}</div>
+                                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs px-2.5 py-1 rounded-full bg-[#F3F4F6] text-[#0F141F]/70">
+                                    {meta.pill}
+                                  </span>
+                                  {createdByYou ? (
+                                    <span className="text-xs px-2.5 py-1 rounded-full bg-[#F6F3ED] text-[#0F141F]/70 border border-black/5">
+                                      Mine
+                                    </span>
+                                  ) : null}
+                                  <span className="text-[11px] text-[#6B7280] truncate">{t.filename}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               </div>
