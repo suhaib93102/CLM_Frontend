@@ -78,6 +78,12 @@ const SidebarV2: React.FC<SidebarV2Props> = ({ mobileOpen = false, onMobileOpenC
       activePaths: ['/contracts', '/contracts/'],
     },
     {
+      name: 'Signing Requests',
+      href: '/signing-requests',
+      icon: <CheckSquare className="w-5 h-5" />,
+      activePaths: ['/signing-requests', '/signing-requests/'],
+    },
+    {
       name: 'Uploads',
       href: '/uploads',
       icon: <Upload className="w-5 h-5" />,

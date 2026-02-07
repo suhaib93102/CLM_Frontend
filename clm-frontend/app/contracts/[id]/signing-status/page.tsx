@@ -168,6 +168,7 @@ export default function SigningStatusPage() {
 	const [details, setDetails] = useState<any | null>(null);
 	const [reminders, setReminders] = useState<any | null>(null);
 	const [downloading, setDownloading] = useState(false);
+	const [downloadingCert, setDownloadingCert] = useState(false);
 	const [events, setEvents] = useState<Array<{ ts: number; type: string; message?: string; payload?: any }>>([]);
 	const [activity, setActivity] = useState<any[] | null>(null);
 	const lastStatusSigRef = useRef<string | null>(null);
@@ -325,6 +326,30 @@ export default function SigningStatusPage() {
 		}
 	};
 
+	const downloadCertificate = async () => {
+		if (!contractId) return;
+		try {
+			setDownloadingCert(true);
+			setError(null);
+			const client = new ApiClient();
+			const res = await client.firmaDownloadCertificate(contractId);
+			if (!res.success || !res.data) {
+				setError(res.error || 'Failed to download certificate');
+				return;
+			}
+			const blobUrl = URL.createObjectURL(res.data);
+			const a = document.createElement('a');
+			a.href = blobUrl;
+			a.download = `${(contract?.title || 'contract').replace(/\s+/g, '_')}_certificate.pdf`;
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+			URL.revokeObjectURL(blobUrl);
+		} finally {
+			setDownloadingCert(false);
+		}
+	};
+
 	return (
 		<DashboardLayout>
 			<div className="flex items-center justify-between gap-4 mb-6">
@@ -362,6 +387,7 @@ export default function SigningStatusPage() {
 
 				<div className="flex items-center gap-2">
 					{steps.completed ? (
+						<>
 						<button
 							type="button"
 							onClick={() => void downloadExecuted()}
@@ -370,6 +396,15 @@ export default function SigningStatusPage() {
 						>
 							{downloading ? 'Downloading…' : 'Download signed PDF'}
 						</button>
+						<button
+							type="button"
+							onClick={() => void downloadCertificate()}
+							disabled={downloadingCert}
+							className="h-10 px-4 rounded-full bg-white border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+						>
+							{downloadingCert ? 'Downloading…' : 'Certificate'}
+						</button>
+						</>
 					) : null}
 					<button
 						type="button"
@@ -520,16 +555,25 @@ export default function SigningStatusPage() {
 												<div className="text-[11px] text-slate-500">Expires</div>
 												<div className="mt-1 text-sm font-semibold text-slate-900">{formatMaybeDate(expiresAt)}</div>
 											</div>
-											{certificateUrl ? (
-												<a
-													href={String(certificateUrl)}
-													target="_blank"
-													rel="noreferrer"
-													className="h-9 px-4 rounded-full bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex-shrink-0"
-												>
-													View certificate
-												</a>
-											) : null}
+												{certificateUrl ? (
+													<a
+														href={String(certificateUrl)}
+														target="_blank"
+														rel="noreferrer"
+														className="h-9 px-4 rounded-full bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex-shrink-0"
+													>
+														View certificate
+													</a>
+												) : steps.completed ? (
+													<button
+														type="button"
+														onClick={() => void downloadCertificate()}
+														disabled={downloadingCert}
+														className="h-9 px-4 rounded-full bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 flex-shrink-0"
+													>
+														{downloadingCert ? 'Downloading…' : 'Download certificate'}
+													</button>
+												) : null}
 										</div>
 									</div>
 								);

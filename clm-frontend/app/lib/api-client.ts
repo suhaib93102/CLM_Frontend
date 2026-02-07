@@ -288,6 +288,15 @@ export interface FirmaStatusResponse {
   success: boolean
   contract_id: string
   status: string
+  created_at?: string | null
+  sent_at?: string | null
+  completed_at?: string | null
+  expires_at?: string | null
+  progress?: {
+    total_signers: number
+    signed: number
+    remaining: number
+  }
   signers: Array<{
     email: string
     name: string
@@ -298,6 +307,40 @@ export interface FirmaStatusResponse {
   all_signed: boolean
   last_checked?: string | null
   warning?: string
+}
+
+export type FirmaSigningRequestStatus =
+  | 'draft'
+  | 'sent'
+  | 'in_progress'
+  | 'completed'
+  | 'declined'
+  | 'failed'
+
+export interface FirmaSigningRequestListItem {
+  id: string
+  provider: 'firma'
+  contract_id: string
+  contract_title: string
+  firma_document_id: string
+  status: FirmaSigningRequestStatus | string
+  signing_order?: 'sequential' | 'parallel' | string
+  sent_at?: string | null
+  completed_at?: string | null
+  expires_at?: string | null
+  last_checked?: string | null
+  last_updated?: string | null
+  progress?: {
+    total_signers: number
+    signed: number
+    remaining: number
+  }
+}
+
+export interface FirmaSigningRequestsListResponse {
+  success: boolean
+  count: number
+  results: FirmaSigningRequestListItem[]
 }
 
 export interface FirmaSignRequest {
@@ -1235,6 +1278,10 @@ export class ApiClient {
     return this.blobRequest(`${ApiClient.API_V1_PREFIX}/firma/esign/executed/${contractId}/`)
   }
 
+  async firmaDownloadCertificate(contractId: string): Promise<ApiResponse<Blob>> {
+    return this.blobRequest(`${ApiClient.API_V1_PREFIX}/firma/esign/certificate/${contractId}/`)
+  }
+
   async firmaDetails(contractId: string): Promise<ApiResponse<FirmaSigningRequestDetailsResponse>> {
     return this.request('GET', `${ApiClient.API_V1_PREFIX}/firma/esign/details/${contractId}/`)
   }
@@ -1250,6 +1297,14 @@ export class ApiClient {
 
   async firmaResendInvites(contractId: string): Promise<ApiResponse<any>> {
     return this.request('POST', `${ApiClient.API_V1_PREFIX}/firma/esign/resend/${contractId}/`, {})
+  }
+
+  async firmaListSigningRequests(params?: { limit?: number; status?: string }): Promise<ApiResponse<any>> {
+    const lim = Math.max(1, Math.min(200, Number(params?.limit) || 50))
+    const qs = new URLSearchParams()
+    qs.set('limit', String(lim))
+    if (params?.status) qs.set('status', String(params.status))
+    return this.request('GET', `${ApiClient.API_V1_PREFIX}/firma/esign/requests/?${qs.toString()}`)
   }
 
   /**
